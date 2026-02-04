@@ -23,90 +23,99 @@ if check_password():
     st.markdown("""
         <div style="background-color:#002b5e;padding:20px;border-radius:10px;border-bottom: 5px solid #FFCC00;margin-bottom:20px;">
         <h1 style="color:white;text-align:center;margin:0;">🚢 SUDATH LOGISTICS INTELLIGENCE</h1>
-        <p style="color:#FFCC00;text-align:center;font-size:18px;margin:5px;">Advanced 3D Multi-Unit Cargo Visualization</p>
+        <p style="color:#FFCC00;text-align:center;font-size:18px;margin:5px;">Advanced 3D Multi-Unit Cargo & DG Specialist</p>
         </div>
         """, unsafe_allow_html=True)
 
-    # Sidebar
-    st.sidebar.markdown("### 🛠️ CONFIGURATION")
-    is_heavy_duty = st.sidebar.toggle("Enable 40HC Heavy Duty (28,000kg)")
+    # --- Sidebar Navigation (මෙහිදී තමයි Menu එක තිබෙන්නේ) ---
+    st.sidebar.markdown("### 🛠️ SELECT SERVICE")
+    app_mode = st.sidebar.radio(
+        "Choose a Service:",
+        ["1. CONSOL PLANNING", "2. OOG CHECK", "3. IMO/DG CHECK"]
+    )
     
+    st.sidebar.divider()
+    st.sidebar.markdown("### ⚙️ SETTINGS")
+    is_heavy_duty = st.sidebar.toggle("Enable 40HC Heavy Duty (28,000kg)")
+
+    # Container Specs
+    hc_payload = 28000 if is_heavy_duty else 26000
     container_specs = {
         "20GP": {"max_cbm": 31.5, "max_kg": 26000, "L": 585, "W": 230, "H": 230},
         "40GP": {"max_cbm": 58.0, "max_kg": 26000, "L": 1200, "W": 230, "H": 230},
-        "40HC": {"max_cbm": 70.0, "max_kg": 28000 if is_heavy_duty else 26000, "L": 1200, "W": 230, "H": 265}
+        "40HC": {"max_cbm": 70.0, "max_kg": hc_payload, "L": 1200, "W": 230, "H": 265}
     }
 
-    # Data Input
-    initial_df = pd.DataFrame(columns=["Cargo_Name", "Length_cm", "Width_cm", "Height_cm", "Quantity", "Weight_kg", "Rotation_Allowed"])
-    df = st.data_editor(initial_df, num_rows="dynamic", key="sudath_3d_final")
+    if app_mode == "1. CONSOL PLANNING":
+        st.subheader("📦 Standard Consolidation & 3D Planner")
+        
+        # Input Table
+        initial_df = pd.DataFrame(columns=["Cargo_Name", "Length_cm", "Width_cm", "Height_cm", "Quantity", "Weight_kg", "Rotation_Allowed"])
+        df = st.data_editor(initial_df, num_rows="dynamic", key="sudath_consol_v9")
 
-    if st.button("Generate 3D Loading Plan"):
-        if not df.empty:
-            df = df.dropna(subset=["Length_cm", "Width_cm", "Height_cm", "Quantity", "Weight_kg"])
-            df[['Length_cm', 'Width_cm', 'Height_cm', 'Quantity', 'Weight_kg']] = df[['Length_cm', 'Width_cm', 'Height_cm', 'Quantity', 'Weight_kg']].apply(pd.to_numeric)
-            
-            total_cbm = ((df['Length_cm'] * df['Width_cm'] * df['Height_cm'] * df['Quantity']) / 1000000).sum()
-            total_wgt = df['Weight_kg'].sum()
-            
-            best_con = next((name for name, spec in container_specs.items() if total_cbm <= spec["max_cbm"] and total_wgt <= spec["max_kg"]), "None")
+        if st.button("Generate 3D Loading Plan"):
+            if not df.empty:
+                df = df.dropna(subset=["Length_cm", "Width_cm", "Height_cm", "Quantity", "Weight_kg"])
+                df[['Length_cm', 'Width_cm', 'Height_cm', 'Quantity', 'Weight_kg']] = df[['Length_cm', 'Width_cm', 'Height_cm', 'Quantity', 'Weight_kg']].apply(pd.to_numeric)
+                
+                total_cbm = ((df['Length_cm'] * df['Width_cm'] * df['Height_cm'] * df['Quantity']) / 1000000).sum()
+                total_wgt = df['Weight_kg'].sum()
+                total_qty = df['Quantity'].sum()
 
-            if best_con != "None":
-                st.subheader(f"📦 Loading Visualization: {best_con}")
-                fig = go.Figure()
-                
-                # Container limits
-                L_limit = container_specs[best_con]["L"]
-                W_limit = container_specs[best_con]["W"]
-                H_limit = container_specs[best_con]["H"]
+                # Summary Metrics
+                m1, m2, m3 = st.columns(3)
+                m1.metric("Total Qty", f"{int(total_qty)} Pcs")
+                m2.metric("Total Weight", f"{total_wgt:,.0f} kg")
+                m3.metric("Total Volume", f"{total_cbm:.2f} CBM")
 
-                # Logic to show all units
-                colors = ['red', 'green', 'blue', 'orange', 'purple', 'cyan']
-                
-                # Simple stacking algorithm for visualization
-                curr_x, curr_y, curr_z = 0, 0, 0
-                
-                for idx, row in df.iterrows():
-                    qty = int(row['Quantity'])
-                    color = colors[idx % len(colors)]
+                best_con = next((name for name, spec in container_specs.items() if total_cbm <= spec["max_cbm"] and total_wgt <= spec["max_kg"]), "None")
+
+                if best_con != "None":
+                    st.success(f"✅ Recommended: {best_con}")
+                    # 3D Visualization Logic
+                    fig = go.Figure()
+                    L_limit, W_limit, H_limit = container_specs[best_con]["L"], container_specs[best_con]["W"], container_specs[best_con]["H"]
                     
-                    for n in range(qty):
-                        # Calculate box corners
-                        x, y, z = curr_x, curr_y, curr_z
-                        dx, dy, dz = row['Length_cm'], row['Width_cm'], row['Height_cm']
-                        
-                        fig.add_trace(go.Mesh3d(
-                            x=[x, x, x+dx, x+dx, x, x, x+dx, x+dx],
-                            y=[y, y+dy, y+dy, y, y, y+dy, y+dy, y],
-                            z=[z, z, z, z, z+dz, z+dz, z+dz, z+dz],
-                            i=[7, 0, 0, 0, 4, 4, 6, 6, 4, 0, 3, 2],
-                            j=[3, 4, 1, 2, 5, 6, 5, 2, 0, 1, 6, 3],
-                            k=[0, 7, 2, 3, 6, 7, 1, 1, 5, 5, 7, 6],
-                            color=color, opacity=0.5, name=f"{row['Cargo_Name']} (Unit {n+1})"
-                        ))
-                        
-                        # Move to next position (Simple Grid Layout)
-                        curr_x += dx
-                        if curr_x + dx > L_limit:
-                            curr_x = 0
-                            curr_y += dy
-                        if curr_y + dy > W_limit:
-                            curr_y = 0
-                            curr_z += dz
+                    colors = ['red', 'green', 'blue', 'orange', 'purple', 'cyan']
+                    curr_x, curr_y, curr_z = 0, 0, 0
+                    
+                    for idx, row in df.iterrows():
+                        color = colors[idx % len(colors)]
+                        for n in range(int(row['Quantity'])):
+                            dx, dy, dz = row['Length_cm'], row['Width_cm'], row['Height_cm']
+                            
+                            # Mesh3d for each box
+                            fig.add_trace(go.Mesh3d(
+                                x=[curr_x, curr_x, curr_x+dx, curr_x+dx, curr_x, curr_x, curr_x+dx, curr_x+dx],
+                                y=[curr_y, curr_y+dy, curr_y+dy, curr_y, curr_y, curr_y+dy, curr_y+dy, curr_y],
+                                z=[curr_z, curr_z, curr_z, curr_z, curr_z+dz, curr_z+dz, curr_z+dz, curr_z+dz],
+                                i=[7, 0, 0, 0, 4, 4, 6, 6, 4, 0, 3, 2],
+                                j=[3, 4, 1, 2, 5, 6, 5, 2, 0, 1, 6, 3],
+                                k=[0, 7, 2, 3, 6, 7, 1, 1, 5, 5, 7, 6],
+                                color=color, opacity=0.5, name=f"{row['Cargo_Name']} {n+1}"
+                            ))
+                            curr_x += dx
+                            if curr_x + dx > L_limit:
+                                curr_x = 0
+                                curr_y += dy
+                            if curr_y + dy > W_limit:
+                                curr_y = 0
+                                curr_z += dz
 
-                fig.update_layout(
-                    scene=dict(
-                        xaxis=dict(title='Length (X)', range=[0, L_limit]),
-                        yaxis=dict(title='Width (Y)', range=[0, W_limit]),
-                        zaxis=dict(title='Height (Z)', range=[0, H_limit]),
-                        aspectmode='manual', aspectratio=dict(x=2, y=0.5, z=0.5)
-                    ),
-                    margin=dict(l=0, r=0, b=0, t=0)
-                )
-                st.plotly_chart(fig, use_container_width=True)
-                st.metric("Total Volume", f"{total_cbm:.2f} CBM")
-            else:
-                st.error("Cargo cannot fit in standard containers.")
+                    fig.update_layout(scene=dict(aspectmode='manual', aspectratio=dict(x=2, y=0.5, z=0.5)))
+                    st.plotly_chart(fig, use_container_width=True)
+                else:
+                    st.error("❌ Exceeds Container Limits")
+
+    elif app_mode == "2. OOG CHECK":
+        st.subheader("🏗️ OOG (Out of Gauge) Cargo Checker")
+        st.info("විශාල යන්ත්‍ර සූත්‍ර වැනි Flat Rack වල පටවන භාණ්ඩ මෙහිදී පරීක්ෂා කළ හැක.")
+        # OOG logic එක මෙතැනට එයි...
+
+    elif app_mode == "3. IMO/DG CHECK":
+        st.subheader("☣️ IMO/DG Dangerous Goods Segregation")
+        st.warning("IMDG Code එකට අනුව භාණ්ඩ වෙන් කර තැබීම (Segregation) මෙහිදී පරීක්ෂා කෙරේ.")
+        # DG logic එක මෙතැනට එයි...
 
     if st.sidebar.button("Logout"):
         del st.session_state["password_correct"]
