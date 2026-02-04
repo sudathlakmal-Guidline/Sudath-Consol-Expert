@@ -109,4 +109,24 @@ if app_mode == "📦 Consolidation Planner":
                 
                 # භාණ්ඩයේ 3D රූපය (Mesh)
                 fig.add_trace(go.Mesh3d(
-                    x=[10, 10, 10+row['Length_cm'], 10+row['Length_cm'], 10, 10, 10+row['Length_cm'], 10
+                    x=[10, 10, 10+row['Length_cm'], 10+row['Length_cm'], 10, 10, 10+row['Length_cm'], 10+row['Length_cm']],
+                    y=[10, 10+row['Width_cm'], 10+row['Width_cm'], 10, 10, 10+row['Width_cm'], 10+row['Width_cm'], 10],
+                    z=[0, 0, 0, 0, row['Height_cm'], row['Height_cm'], row['Height_cm'], row['Height_cm']],
+                    color=clr, opacity=0.8, name=row['Cargo_Name']
+                ))
+
+            # 3. ප්‍රස්ථාරයේ අක්ෂයන් සහ උස හරියටම පාලනය කිරීම
+            fig.update_layout(
+                scene=dict(
+                    xaxis=dict(range=[-50, L_lim+50], title="Length (cm)"),
+                    yaxis=dict(range=[-50, W_lim+50], title="Width (cm)"),
+                    zaxis=dict(range=[0, H_lim], title="Height (cm)"), # මෙහිදී උස 230 හෝ 265 ට හරියටම සීමා වේ
+                    aspectmode='manual',
+                    aspectratio=dict(x=2.5, y=1, z=1) # දිගටි Professional පෙනුම
+                ),
+                margin=dict(l=0, r=0, b=0, t=0)
+            )
+            st.plotly_chart(fig, use_container_width=True)
+
+# Footer
+st.markdown("<br><hr><p style='text-align: center; color: gray;'>Smart Consol Planner v10.0 | Strategic Intelligence | By Sudath</p>", unsafe_allow_html=True)
