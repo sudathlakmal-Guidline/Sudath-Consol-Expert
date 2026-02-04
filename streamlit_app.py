@@ -82,4 +82,32 @@ if check_password():
                             i=[7, 0, 0, 0, 4, 4, 6, 6, 4, 0, 3, 2],
                             j=[3, 4, 1, 2, 5, 6, 5, 2, 0, 1, 6, 3],
                             k=[0, 7, 2, 3, 6, 7, 1, 1, 5, 5, 7, 6],
-                            color=color, opacity=0.5
+                            color=color, opacity=0.5, name=f"{row['Cargo_Name']} (Unit {n+1})"
+                        ))
+                        
+                        # Move to next position (Simple Grid Layout)
+                        curr_x += dx
+                        if curr_x + dx > L_limit:
+                            curr_x = 0
+                            curr_y += dy
+                        if curr_y + dy > W_limit:
+                            curr_y = 0
+                            curr_z += dz
+
+                fig.update_layout(
+                    scene=dict(
+                        xaxis=dict(title='Length (X)', range=[0, L_limit]),
+                        yaxis=dict(title='Width (Y)', range=[0, W_limit]),
+                        zaxis=dict(title='Height (Z)', range=[0, H_limit]),
+                        aspectmode='manual', aspectratio=dict(x=2, y=0.5, z=0.5)
+                    ),
+                    margin=dict(l=0, r=0, b=0, t=0)
+                )
+                st.plotly_chart(fig, use_container_width=True)
+                st.metric("Total Volume", f"{total_cbm:.2f} CBM")
+            else:
+                st.error("Cargo cannot fit in standard containers.")
+
+    if st.sidebar.button("Logout"):
+        del st.session_state["password_correct"]
+        st.rerun()
