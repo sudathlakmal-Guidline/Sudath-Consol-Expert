@@ -75,4 +75,14 @@ if st.button("GENERATE ADVANCED LOADING PLAN", type="primary"):
             if x + row['Length_cm'] > L: x = 0; y += row['Width_cm']
             if y + row['Width_cm'] > W: y = 0; z += max_h; max_h = 0
             
-            if z + row
+            if z + row['Height_cm'] <= H:
+                fig.add_trace(go.Mesh3d(
+                    x=[x, x, x+row['Length_cm'], x+row['Length_cm'], x, x, x+row['Length_cm'], x+row['Length_cm']],
+                    y=[y, y+row['Width_cm'], y+row['Width_cm'], y, y, y+row['Width_cm'], y+row['Width_cm'], y],
+                    z=[z, z, z, z, z+row['Height_cm'], z+row['Height_cm'], z+row['Height_cm'], z+row['Height_cm']],
+                    color=clr, opacity=0.8, alphahull=0
+                ))
+                x += row['Length_cm']; max_h = max(max_h, row['Height_cm'])
+
+    fig.update_layout(scene=dict(aspectmode='manual', aspectratio=dict(x=2.5, y=1, z=1)), margin=dict(l=0,r=0,b=0,t=0))
+    st.plotly_chart(fig, use_container_width=True)
