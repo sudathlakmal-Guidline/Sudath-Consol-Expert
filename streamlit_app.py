@@ -23,11 +23,11 @@ if check_password():
     st.markdown("""
         <div style="background-color:#002b5e;padding:20px;border-radius:10px;border-bottom: 5px solid #FFCC00;margin-bottom:20px;">
         <h1 style="color:white;text-align:center;margin:0;">🚢 SUDATH LOGISTICS INTELLIGENCE</h1>
-        <p style="color:#FFCC00;text-align:center;font-size:18px;margin:5px;">Advanced 3D Multi-Unit Cargo & DG Specialist</p>
+        <p style="color:#FFCC00;text-align:center;font-size:18px;margin:5px;">Advanced 3D Multi-Unit Cargo & Space Optimization</p>
         </div>
         """, unsafe_allow_html=True)
 
-    # --- Sidebar Navigation (මෙහිදී තමයි Menu එක තිබෙන්නේ) ---
+    # --- Sidebar Navigation ---
     st.sidebar.markdown("### 🛠️ SELECT SERVICE")
     app_mode = st.sidebar.radio(
         "Choose a Service:",
@@ -39,19 +39,17 @@ if check_password():
     is_heavy_duty = st.sidebar.toggle("Enable 40HC Heavy Duty (28,000kg)")
 
     # Container Specs
-    hc_payload = 28000 if is_heavy_duty else 26000
     container_specs = {
         "20GP": {"max_cbm": 31.5, "max_kg": 26000, "L": 585, "W": 230, "H": 230},
         "40GP": {"max_cbm": 58.0, "max_kg": 26000, "L": 1200, "W": 230, "H": 230},
-        "40HC": {"max_cbm": 70.0, "max_kg": hc_payload, "L": 1200, "W": 230, "H": 265}
+        "40HC": {"max_cbm": 70.0, "max_kg": 28000 if is_heavy_duty else 26000, "L": 1200, "W": 230, "H": 265}
     }
 
     if app_mode == "1. CONSOL PLANNING":
-        st.subheader("📦 Standard Consolidation & 3D Planner")
+        st.subheader("📦 Standard Consolidation & 3D Space Analysis")
         
-        # Input Table
         initial_df = pd.DataFrame(columns=["Cargo_Name", "Length_cm", "Width_cm", "Height_cm", "Quantity", "Weight_kg", "Rotation_Allowed"])
-        df = st.data_editor(initial_df, num_rows="dynamic", key="sudath_consol_v9")
+        df = st.data_editor(initial_df, num_rows="dynamic", key="sudath_consol_v10")
 
         if st.button("Generate 3D Loading Plan"):
             if not df.empty:
@@ -62,17 +60,31 @@ if check_password():
                 total_wgt = df['Weight_kg'].sum()
                 total_qty = df['Quantity'].sum()
 
-                # Summary Metrics
-                m1, m2, m3 = st.columns(3)
-                m1.metric("Total Qty", f"{int(total_qty)} Pcs")
-                m2.metric("Total Weight", f"{total_wgt:,.0f} kg")
-                m3.metric("Total Volume", f"{total_cbm:.2f} CBM")
-
+                # Best Container Recommendation
                 best_con = next((name for name, spec in container_specs.items() if total_cbm <= spec["max_cbm"] and total_wgt <= spec["max_kg"]), "None")
 
                 if best_con != "None":
-                    st.success(f"✅ Recommended: {best_con}")
-                    # 3D Visualization Logic
+                    max_vol = container_specs[best_con]["max_cbm"]
+                    fill_pct = min((total_cbm / max_vol) * 100, 100)
+                    remaining_cbm = max_vol - total_cbm
+
+                    # 1. Summary Metrics
+                    st.divider()
+                    col1, col2, col3 = st.columns(3)
+                    col1.metric("Total Quantity", f"{int(total_qty)} Pcs")
+                    col2.metric("Total Weight", f"{total_wgt:,.0f} kg")
+                    col3.metric("Total Volume", f"{total_cbm:.2f} CBM")
+
+                    # 2. Space Utilization Progress Bar
+                    st.write(f"### 📊 Container Utilization: {best_con}")
+                    st.progress(fill_pct / 100)
+                    
+                    p1, p2 = st.columns(2)
+                    p1.markdown(f"**Filled Space:** `{fill_pct:.1f}%`")
+                    p2.markdown(f"**Remaining Capacity:** `{remaining_cbm:.2f} CBM`")
+                    st.success(f"Recommended: {best_con}")
+
+                    # 3. 3D Visualization
                     fig = go.Figure()
                     L_limit, W_limit, H_limit = container_specs[best_con]["L"], container_specs[best_con]["W"], container_specs[best_con]["H"]
                     
@@ -84,7 +96,6 @@ if check_password():
                         for n in range(int(row['Quantity'])):
                             dx, dy, dz = row['Length_cm'], row['Width_cm'], row['Height_cm']
                             
-                            # Mesh3d for each box
                             fig.add_trace(go.Mesh3d(
                                 x=[curr_x, curr_x, curr_x+dx, curr_x+dx, curr_x, curr_x, curr_x+dx, curr_x+dx],
                                 y=[curr_y, curr_y+dy, curr_y+dy, curr_y, curr_y, curr_y+dy, curr_y+dy, curr_y],
@@ -102,20 +113,23 @@ if check_password():
                                 curr_y = 0
                                 curr_z += dz
 
-                    fig.update_layout(scene=dict(aspectmode='manual', aspectratio=dict(x=2, y=0.5, z=0.5)))
+                    fig.update_layout(
+                        scene=dict(
+                            xaxis=dict(title='Length (X)', range=[0, L_limit]),
+                            yaxis=dict(title='Width (Y)', range=[0, W_limit]),
+                            zaxis=dict(title='Height (Z)', range=[0, H_limit]),
+                            aspectmode='manual', aspectratio=dict(x=2, y=0.5, z=0.5)
+                        ),
+                        margin=dict(l=0, r=0, b=0, t=0)
+                    )
                     st.plotly_chart(fig, use_container_width=True)
                 else:
-                    st.error("❌ Exceeds Container Limits")
+                    st.error("❌ Exceeds Container Limits! Please split the shipment.")
 
     elif app_mode == "2. OOG CHECK":
-        st.subheader("🏗️ OOG (Out of Gauge) Cargo Checker")
-        st.info("විශාල යන්ත්‍ර සූත්‍ර වැනි Flat Rack වල පටවන භාණ්ඩ මෙහිදී පරීක්ෂා කළ හැක.")
-        # OOG logic එක මෙතැනට එයි...
-
+        st.subheader("🏗️ OOG (Out of Gauge) Check")
     elif app_mode == "3. IMO/DG CHECK":
-        st.subheader("☣️ IMO/DG Dangerous Goods Segregation")
-        st.warning("IMDG Code එකට අනුව භාණ්ඩ වෙන් කර තැබීම (Segregation) මෙහිදී පරීක්ෂා කෙරේ.")
-        # DG logic එක මෙතැනට එයි...
+        st.subheader("☣️ IMO/DG Segregation")
 
     if st.sidebar.button("Logout"):
         del st.session_state["password_correct"]
