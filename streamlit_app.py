@@ -102,3 +102,10 @@ if app_mode == "📦 Consolidation Planner":
                     xaxis=dict(range=[-10, L_lim+10], title="Length (cm)"),
                     yaxis=dict(range=[-10, W_lim+10], title="Width (cm)"),
                     zaxis=dict(range=[0, H_lim], title="Height (cm)"), # උස පාලනය
+                    aspectmode='manual', aspectratio=dict(x=2.5, y=1, z=1)
+                ),
+                margin=dict(l=0, r=0, b=0, t=0)
+            )
+            st.plotly_chart(fig, use_container_width=True)
+
+st.markdown("<br><hr><p style='text-align: center; color: gray;'>Smart Consol Planner v11.0 | By Sudath</p>", unsafe_allow_html=True)
