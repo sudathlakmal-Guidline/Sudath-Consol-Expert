@@ -4,7 +4,7 @@ import pandas as pd
 # Page Configuration
 st.set_page_config(page_title="Sudath DG & Consol Expert", layout="wide", page_icon="☣️")
 
-# --- IMDG Segregation Logic ---
+# --- IMDG Segregation Matrix Logic ---
 seg_matrix = {
     "2.1": {"2.1": "X", "2.2": "0", "3": "2", "4.1": "0", "5.1": "2", "8": "1"},
     "3":   {"2.1": "2", "2.2": "0", "3": "X", "4.1": "0", "5.1": "2", "8": "0"},
@@ -12,7 +12,7 @@ seg_matrix = {
     "8":   {"2.1": "1", "2.2": "0", "3": "0", "4.1": "1", "5.1": "2", "8": "X"}
 }
 
-# --- Password System ---
+# --- Password Authentication ---
 def check_password():
     if "password_correct" not in st.session_state:
         st.markdown("<h2 style='text-align: center;'>🔐 Admin Login Required</h2>", unsafe_allow_html=True)
@@ -26,6 +26,7 @@ def check_password():
         return False
     return True
 
+# --- Main App Logic ---
 if check_password():
     st.markdown("""
         <div style="background-color:#800000;padding:20px;border-radius:10px">
@@ -34,7 +35,7 @@ if check_password():
         </div>
         """, unsafe_allow_html=True)
 
-    # Container Specs
+    # Standard Container Specifications
     container_specs = {
         "20GP": {"max_cbm": 28.0, "max_kg": 26000, "L": 585, "W": 230, "H": 228},
         "40GP": {"max_cbm": 55.0, "max_kg": 26000, "L": 1200, "W": 230, "H": 228},
@@ -77,8 +78,42 @@ if check_password():
                         else:
                             st.warning("Cargo fits dimensions but exceeds weight/volume for one container.")
                     st.dataframe(df)
-                except:
-                    st.error("Please enter valid numbers.")
+                except Exception as e:
+                    st.error(f"Error: {e}")
 
     # --- MODULE 2: DG COMPLIANCE ---
     elif app_mode == "DG Compliance & Segregation":
+        st.subheader("⚠️ IMDG Class & Colombo Customs Compliance")
+        
+        c1, c2 = st.columns(2)
+        with c1:
+            imdg_class = st.selectbox("IMDG Class:", ["2.1", "3", "4.1", "5.1", "6.1", "8", "9"])
+            un_no = st.text_input("UN Number:")
+            carrier = st.selectbox("Line:", ["Maersk", "MSC", "Hapag-Lloyd", "CMA CGM", "ONE", "Other"])
+        
+        with c2:
+            st.markdown("### 📄 Required Docs (Colombo Customs)")
+            st.write("- **CUSDEC** (Customs Declaration)")
+            st.write("- **DGD** (Dangerous Goods Declaration)")
+            st.write("- **MSDS** (16 Sections mandatory)")
+            st.write("- **CDN / Boat Note**")
+
+        if st.button("Check DG Compliance"):
+            st.divider()
+            st.subheader(f"Advice for Class {imdg_class} via {carrier}")
+            
+            if imdg_class in seg_matrix:
+                st.info("🔍 **IMDG Segregation Advisor:**")
+                for other, rule in seg_matrix[imdg_class].items():
+                    if rule == "2": st.error(f"❌ **Separated from** Class {other} (min 6m)")
+                    if rule == "1": st.warning(f"⚠️ **Away from** Class {other} (min 3m)")
+
+            st.markdown("### 🏷️ Labeling")
+            st.write(f"Ensure Class {imdg_class} placards are on all 4 sides of the container.")
+            
+            if carrier in ["Maersk", "MSC"]:
+                st.error(f"🛑 {carrier} requires DG approval before gate-in.")
+
+    if st.sidebar.button("Logout"):
+        del st.session_state["password_correct"]
+        st.rerun()
