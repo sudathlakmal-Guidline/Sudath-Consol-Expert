@@ -4,70 +4,68 @@ import plotly.graph_objects as go
 from datetime import datetime, timedelta
 import os
 
-# 1. SYSTEM CONFIGURATION
+# 1. SETUP
 st.set_page_config(page_title="SMART CONSOL PLANNER - BY SUDATH", layout="wide")
+DB = "users_db.csv"
+if not os.path.exists(DB): pd.DataFrame(columns=["e","p","d"]).to_csv(DB, index=False)
 
-USER_DB = "users_db.csv"
-if not os.path.exists(USER_DB):
-    pd.DataFrame(columns=["email", "password", "reg_date"]).to_csv(USER_DB, index=False)
-
-def load_u(): return pd.read_csv(USER_DB)
-def save_u(e, p):
-    df = load_u()
-    if e in df['email'].values.astype(str): return False
-    new_u = pd.DataFrame([[e, p, datetime.now().strftime('%Y-%m-%d')]], columns=["email", "password", "reg_date"])
-    pd.concat([df, new_u], ignore_index=True).to_csv(USER_DB, index=False)
+def load(): return pd.read_csv(DB)
+def save(e, p):
+    df = load()
+    if str(e) in df['e'].values.astype(str): return False
+    pd.concat([df, pd.DataFrame([[e,p,datetime.now().strftime('%Y-%m-%d')]], columns=["e","p","d"])], ignore_index=True).to_csv(DB, index=False)
     return True
 
-# Styling
-st.markdown("""
-    <style>
-    .main-header { background: linear-gradient(135deg, #002b5e 0%, #004a99 100%); padding: 25px; border-radius: 12px; color: white; text-align: center; margin-bottom: 25px; }
-    .legend-box { padding: 8px; border-radius: 5px; margin: 2px; color: white; font-weight: bold; text-align: center; font-size: 12px; }
-    </style>
-    """, unsafe_allow_html=True)
-
-# 2. LOGIN & TRIAL SYSTEM
-if 'logged_in' not in st.session_state: st.session_state.logged_in = False
-
-if not st.session_state.logged_in:
-    st.markdown("<h1 style='text-align: center;'>🚢 SMART CONSOL SYSTEM</h1>", unsafe_allow_html=True)
-    t1, t2 = st.tabs(["🔐 LOGIN", "📝 REGISTER"])
+# 2. AUTH
+if 'L' not in st.session_state: st.session_state.L = False
+if not st.session_state.L:
+    st.title("🚢 SMART CONSOL SYSTEM")
+    t1, t2 = st.tabs(["LOGIN", "REGISTER"])
     with t1:
-        with st.form("login_form"):
-            u_e = st.text_input("Email")
-            u_p = st.text_input("Password", type="password")
-            if st.form_submit_button("ENTER SYSTEM", use_container_width=True):
-                users = load_u()
-                match = users[users['email'] == u_e]
-                if not match.empty and str(match.iloc[0]['password']) == u_p:
-                    reg = datetime.strptime(str(match.iloc[0]['reg_date']), '%Y-%m-%d')
-                    exp = reg + timedelta(days=30)
-                    if datetime.now() <= exp:
-                        st.session_state.logged_in, st.session_state.user, st.session_state.exp = True, u_e, exp.strftime('%Y-%m-%d')
-                        st.rerun()
-                    else: st.error("Trial Expired! Contact Sudath.")
-                else: st.error("Invalid Credentials")
+        with st.form("a"):
+            e, p = st.text_input("Email"), st.text_input("Password", type="password")
+            if st.form_submit_button("ENTER"):
+                u = load()
+                m = u[u['e'] == e]
+                if not m.empty and str(m.iloc[0]['p']) == p:
+                    st.session_state.L, st.session_state.u = True, e
+                    st.rerun()
+                else: st.error("Failed")
     with t2:
-        with st.form("signup_form"):
-            n_e, n_p = st.text_input("Business Email"), st.text_input("Password", type="password")
-            if st.form_submit_button("START 30-DAY FREE TRIAL"):
-                if n_e and len(n_p) > 3:
-                    if save_u(n_e, n_p): st.success("Account Created! Please Login.")
-                    else: st.error("Email already exists!")
-
+        with st.form("b"):
+            ne, np = st.text_input("New Email"), st.text_input("New Password", type="password")
+            if st.form_submit_button("SIGN UP"):
+                if save(ne, np): st.success("Done!")
+                else: st.error("Error")
 else:
-    # 3. MAIN INTERFACE
-    st.markdown(f'<div class="main-header"><h1>🚢 SMART CONSOL PLANNER - BY SUDATH</h1><p>User: {st.session_state.user} | Trial Ends: {st.session_state.exp}</p></div>', unsafe_allow_html=True)
+    # 3. APP
+    st.markdown(f"### 🚢 SMART CONSOL PLANNER - BY SUDATH (User: {st.session_state.u})")
+    if st.sidebar.button("LOGOUT"):
+        st.session_state.L = False
+        st.rerun()
     
-    with st.sidebar:
-        st.markdown(f"### 👤 {st.session_state.user}")
-        if st.button("LOGOUT"):
-            st.session_state.logged_in = False
-            st.rerun()
-        st.divider()
-        mod = st.radio("SELECT:", ["📦 Consolidation", "🏗️ OOG Check"])
+    m = st.sidebar.radio("MODE", ["Consolidation", "OOG"])
+    if m == "Consolidation":
+        df = st.data_editor(pd.DataFrame([{"Cargo":"P1","L":115,"W":115,"H":115,"Qty":10}]), num_rows="dynamic")
+        if st.button("RUN 3D"):
+            c = df.dropna()
+            fig = go.Figure()
+            # Container
+            L, W, H = 585, 230, 235
+            fig.add_trace(go.Scatter3d(x=[0,L,L,0,0,0,L,L,0,0,L,L,L,L,0,0], y=[0,0,W,W,0,0,0,W,W,0,0,0,W,W,W,W], z=[0,0,0,0,0,H,H,H,H,H,H,0,0,H,H,0], mode='lines', line=dict(color='black')))
+            
+            # Simple Placement
+            x, y, z, mh = 0, 0, 0, 0
+            for i, r in c.iterrows():
+                l, w, h = r['L'], r['W'], r['H']
+                for _ in range(int(r['Qty'])):
+                    if x + l > L: x=0; y+=w
+                    if y + w > W: y=0; z+=mh; mh=0
+                    if z + h <= H:
+                        fig.add_trace(go.Mesh3d(x=[x,x,x+l,x+l,x,x,x+l,x+l], y=[y,y+w,y+w,y,y,y+w,y+w,y], z=[z,z,z,z,z+h,z+h,z+h,z+h], color="blue", opacity=0.6, alphahull=0))
+                        x+=l; mh=max(mh, h)
+            st.plotly_chart(fig)
+    else:
+        st.write("OOG Check Active")
 
-    if mod == "📦 Consolidation":
-        init_df = pd.DataFrame([{"Cargo": "P1", "L": 115, "W": 115, "H": 115, "Qty": 10, "Wgt": 1000, "Rot": "NO"}])
-        df_in = st.
+st.markdown("<hr><center>SMART CONSOL PLANNER - BY SUDATH</center>", unsafe_allow_html=True)
