@@ -17,17 +17,17 @@ def login():
             email = st.text_input("Email Address")
             password = st.text_input("Password", type="password")
             if st.button("Login to System", use_container_width=True):
-                # දැනට පරීක්ෂාව සඳහා ලබා දී ඇති දත්ත
+                # Admin credentials
                 if email == "sudath@expert.com" and password == "admin123":
                     st.session_state.logged_in = True
                     st.rerun()
                 else:
-                    st.error("Invalid Email or Password. Please try again.")
+                    st.error("Invalid Email or Password.")
 
 if not st.session_state.logged_in:
     login()
 else:
-    # 2. UI Header
+    # 2. UI Styling
     st.markdown("""
         <style>
         .main-header { background: linear-gradient(135deg, #002b5e 0%, #004a99 100%); padding: 25px; border-radius: 12px; color: white; text-align: center; margin-bottom: 25px; }
@@ -36,7 +36,7 @@ else:
         </style>
         <div class="main-header">
             <h1>🚢 SMART CONSOL PLANNER - BY SUDATH</h1>
-            <p>Strategic Freight Intelligence System | Logged in as Admin</p>
+            <p>Strategic Freight Intelligence System | Premium Access</p>
         </div>
         """, unsafe_allow_html=True)
 
@@ -46,79 +46,84 @@ else:
         "40HC": {"L": 1200, "W": 230, "H": 265, "vol": 70.0, "kg": 28000}
     }
 
-    # 4. SIDEBAR NAVIGATION & LOGOUT
+    # 4. SIDEBAR NAVIGATION
     with st.sidebar:
-        st.markdown(f"### 👤 Logged in")
-        st.write("sudath@expert.com")
+        st.markdown(f"### 👤 Admin: Sudath")
         if st.button("Logout"):
             st.session_state.logged_in = False
             st.rerun()
         st.divider()
-        st.markdown("### 🛠️ NAVIGATION CENTER")
-        app_mode = st.radio("Select Module:", ["📦 Consolidation Planner", "🏗️ OOG Assessment", "☣️ IMDG Segregation"])
+        app_mode = st.radio("Select Module:", ["📦 Consolidation Planner", "🏗️ OOG Assessment"])
         st.divider()
-        carrier_policy = st.selectbox("Carrier Principle:", ["Main Line Operator (MLO)", "NVOCC / Feeder"])
+        carrier = st.selectbox("Carrier Principle:", ["Main Line Operator (MLO)", "NVOCC"])
 
     if app_mode == "📦 Consolidation Planner":
         st.markdown("### 1. MANIFEST DATA ENTRY")
+        # Rotation column included
         init_data = [
-            {"Cargo_Name": "P1", "Length_cm": 115, "Width_cm": 115, "Height_cm": 115, "Quantity": 10, "Weight_kg": 10000},
-            {"Cargo_Name": "P2", "Length_cm": 115, "Width_cm": 115, "Height_cm": 75, "Quantity": 10, "Weight_kg": 10000}
+            {"Cargo_Name": "P1", "Length_cm": 115, "Width_cm": 115, "Height_cm": 115, "Quantity": 10, "Weight_kg": 10000, "Rotation": "NO"},
+            {"Cargo_Name": "P2", "Length_cm": 115, "Width_cm": 115, "Height_cm": 75, "Quantity": 10, "Weight_kg": 10000, "Rotation": "NO"}
         ]
-        df = st.data_editor(pd.DataFrame(init_data), num_rows="dynamic", key="v23_final")
+        df = st.data_editor(pd.DataFrame(init_data), num_rows="dynamic", key="v25_sudath")
 
         if st.button("GENERATE ADVANCED LOADING PLAN", type="primary"):
             df = df.dropna()
-            total_wgt = df['Weight_kg'].sum()
             total_cbm = ((df['Length_cm'] * df['Width_cm'] * df['Height_cm'] * df['Quantity']) / 1000000).sum()
-            best_con = "20GP" if total_wgt <= 26000 and total_cbm <= 31.5 else "40HC"
+            total_wgt = df['Weight_kg'].sum()
+            
+            # Selection Logic
+            best_con = "20GP" if total_cbm <= 31.5 and total_wgt <= 26000 else "40HC"
             util_pct = min((total_cbm / specs[best_con]["vol"]), 1.0)
 
-            # 5. HIGHLIGHTED ANALYTICS FRAME
-            st.markdown("### 2. CONSOLIDATION ANALYTICS")
+            # 5. HIGHLIGHTED ANALYTICS
             st.markdown(f"""
                 <div class="utilization-frame">
-                    <div style="display: flex; justify-content: space-around; margin-bottom: 15px;">
+                    <div style="display: flex; justify-content: space-around;">
                         <div class="stat-text">Total Weight: {total_wgt:,.0f} kg</div>
                         <div class="stat-text">Total Volume: {total_cbm:.3f} CBM</div>
                         <div class="stat-text">Equipment: {best_con}</div>
                     </div>
-                    <div style="font-weight: bold; margin-bottom: 5px; color: #004a99;">Space Utilization Percentage:</div>
                 </div>
-            """, unsafe_allow_html=True)
+                """, unsafe_allow_html=True)
             st.progress(util_pct)
 
             # 6. 3D CHART ENGINE
-            st.markdown("### 3. ADVANCED 3D PLACEMENT")
+            st.markdown("### 2. 3D CARGO PLACEMENT SIMULATION")
             fig = go.Figure()
             L, W, H = specs[best_con]["L"], specs[best_con]["W"], specs[best_con]["H"]
             
+            # Container Wireframe
             fig.add_trace(go.Scatter3d(
                 x=[0, L, L, 0, 0, 0, L, L, 0, 0, L, L, L, L, 0, 0],
                 y=[0, 0, W, W, 0, 0, 0, W, W, 0, 0, 0, W, W, W, W],
                 z=[0, 0, 0, 0, 0, H, H, H, H, H, H, 0, 0, H, H, 0],
-                mode='lines', line=dict(color='black', width=5), name='Frame'
+                mode='lines', line=dict(color='black', width=4), name='Container'
             ))
 
+            # Cargo Placement Logic
             colors = ['#EF553B', '#00CC96', '#636EFA', '#AB63FA']
-            curr_x, curr_y, curr_z, max_h = 0, 0, 0, 0
-
+            x_p, y_p, z_p, max_h = 0, 0, 0, 0
+            
             for i, row in df.iterrows():
                 clr = colors[i % len(colors)]
-                for q in range(int(row['Quantity'])):
-                    if curr_x + row['Length_cm'] > L: curr_x = 0; curr_y += row['Width_cm']
-                    if curr_y + row['Width_cm'] > W: curr_y = 0; curr_z += max_h; max_h = 0
+                for _ in range(int(row['Quantity'])):
+                    # Check Container Boundaries
+                    if x_p + row['Length_cm'] > L:
+                        x_p = 0; y_p += row['Width_cm']
+                    if y_p + row['Width_cm'] > W:
+                        y_p = 0; z_p += max_h; max_h = 0
                     
-                    if curr_z + row['Height_cm'] <= H:
+                    if z_p + row['Height_cm'] <= H:
                         fig.add_trace(go.Mesh3d(
-                            x=[curr_x, curr_x, curr_x+row['Length_cm'], curr_x+row['Length_cm'], curr_x, curr_x, curr_x+row['Length_cm'], curr_x+row['Length_cm']],
-                            y=[curr_y, curr_y+row['Width_cm'], curr_y+row['Width_cm'], curr_y, curr_y, curr_y+row['Width_cm'], curr_y+row['Width_cm'], curr_y],
-                            z=[curr_z, curr_z, curr_z, curr_z, curr_z+row['Height_cm'], curr_z+row['Height_cm'], curr_z+row['Height_cm'], curr_z+row['Height_cm']],
-                            color=clr, opacity=0.8, alphahull=0
+                            x=[x_p, x_p, x_p+row['Length_cm'], x_p+row['Length_cm'], x_p, x_p, x_p+row['Length_cm'], x_p+row['Length_cm']],
+                            y=[y_p, y_p+row['Width_cm'], y_p+row['Width_cm'], y_p, y_p, y_p+row['Width_cm'], y_p+row['Width_cm'], y_p],
+                            z=[z_p, z_p, z_p, z_p, z_p+row['Height_cm'], z_p+row['Height_cm'], z_p+row['Height_cm'], z_p+row['Height_cm']],
+                            color=clr, opacity=0.7, alphahull=0
                         ))
-                        curr_x += row['Length_cm']; max_h = max(max_h, row['Height_cm'])
+                        x_p += row['Length_cm']
+                        max_h = max(max_h, row['Height_cm'])
 
             fig.update_layout(scene=dict(aspectmode='manual', aspectratio=dict(x=2.5, y=1, z=1)), margin=dict(l=0,r=0,b=0,t=0))
             st.plotly_chart(fig, use_container_width=True)
 
-    st.markdown("<br><hr><p style='text-align: center; color: gray;'>SMART CONSOL PLANNER - BY SUDATH | v23.0 Secured</p>", unsafe_allow_html=True)
+    st.markdown("<br><hr><p style='text-align: center; color: gray;'>SMART CONSOL PLANNER - BY SUDATH | v25.0 Full Stable</p>", unsafe_allow_html=True)
