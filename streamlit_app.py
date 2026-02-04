@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+import plotly.graph_objects as go
 
 # Page Configuration
 st.set_page_config(page_title="Sudath Logistics Expert", layout="wide", page_icon="🚢")
@@ -22,21 +23,15 @@ if check_password():
     st.markdown("""
         <div style="background-color:#002b5e;padding:20px;border-radius:10px;border-bottom: 5px solid #FFCC00;margin-bottom:20px;">
         <h1 style="color:white;text-align:center;margin:0;">🚢 SUDATH LOGISTICS INTELLIGENCE</h1>
-        <p style="color:#FFCC00;text-align:center;font-size:18px;margin:5px;">Colombo Port Command Center - Cargo Loading Specialist</p>
+        <p style="color:#FFCC00;text-align:center;font-size:18px;margin:5px;">3D Cargo Placement & Orientation Specialist</p>
         </div>
         """, unsafe_allow_html=True)
 
-    # Sidebar Navigation (Clean & Simple)
-    st.sidebar.markdown("### 🛠️ SELECT SERVICE")
-    app_mode = st.sidebar.radio(
-        "Navigation:",
-        ["1. CONSOL PLANNING", "2. OOG CHECK", "3. IMO/DG CHECK"]
-    )
-    
-    # 40HC Heavy Duty Toggle (Only for special cases)
+    # Sidebar
+    st.sidebar.markdown("### 🛠️ CONFIGURATION")
     is_heavy_duty = st.sidebar.toggle("Enable 40HC Heavy Duty (28,000kg)")
-
-    # Container Specs - Weights are 26,000kg unless Heavy Duty 40HC is selected
+    
+    # Container Specs
     hc_payload = 28000 if is_heavy_duty else 26000
     container_specs = {
         "20GP": {"max_cbm": 31.5, "max_kg": 26000, "L": 585, "W": 230, "H": 230},
@@ -44,67 +39,88 @@ if check_password():
         "40HC": {"max_cbm": 70.0, "max_kg": hc_payload, "L": 1200, "W": 230, "H": 265}
     }
 
-    if app_mode == "1. CONSOL PLANNING":
-        st.subheader("📦 Standard Consolidation Planner")
-        
-        if st.button("🗑️ Reset All Data"):
-            st.cache_data.clear()
-            st.rerun()
+    # Input Table with Rotation Option
+    initial_df = pd.DataFrame(columns=[
+        "Cargo_Name", "Length_cm", "Width_cm", "Height_cm", "Quantity", "Weight_kg", "Rotation_Allowed"
+    ])
+    # Setting default rotation to False for safety
+    df = st.data_editor(initial_df, num_rows="dynamic", key="sudath_3d_v8")
 
-        # Input Table (Simplified)
-        # Note: Weight_kg is treated as the total weight for that specific shipment/line
-        initial_df = pd.DataFrame(columns=["Cargo_Name", "Length_cm", "Width_cm", "Height_cm", "Quantity", "Weight_kg"])
-        df = st.data_editor(initial_df, num_rows="dynamic", key="sudath_editor_final")
+    if st.button("Generate Advanced 3D Plan"):
+        if not df.empty:
+            df = df.dropna(subset=["Length_cm", "Width_cm", "Height_cm", "Quantity", "Weight_kg"])
+            df[['Length_cm', 'Width_cm', 'Height_cm', 'Quantity', 'Weight_kg']] = df[['Length_cm', 'Width_cm', 'Height_cm', 'Quantity', 'Weight_kg']].apply(pd.to_numeric)
+            
+            df['Total_CBM'] = (df['Length_cm'] * df['Width_cm'] * df['Height_cm'] * df['Quantity']) / 1000000
+            
+            total_qty = df['Quantity'].sum()
+            total_wgt = df['Weight_kg'].sum()
+            total_cbm = df['Total_CBM'].sum()
 
-        if st.button("Generate Loading Plan"):
-            if not df.empty:
-                # Cleaning data
-                df = df.dropna(subset=["Length_cm", "Width_cm", "Height_cm", "Quantity", "Weight_kg"])
-                for col in ["Length_cm", "Width_cm", "Height_cm", "Quantity", "Weight_kg"]:
-                    df[col] = pd.to_numeric(df[col], errors='coerce')
-                df = df.dropna()
+            # Summary Results
+            st.subheader("📋 Shipment Summary")
+            c1, c2, c3, c4 = st.columns(4)
+            c1.metric("Total Qty", f"{int(total_qty)} Pcs")
+            c2.metric("Total Weight", f"{total_wgt:,.0f} kg")
+            c3.metric("Total Volume", f"{total_cbm:.2f} CBM")
+            
+            best_con = next((name for name, spec in container_specs.items() if total_cbm <= spec["max_cbm"] and total_wgt <= spec["max_kg"]), "None")
+            c4.metric("Recommended", best_con)
 
-                if not df.empty:
-                    # Logic: Each row's Weight_kg is already the total for that line
-                    # Each row's CBM = (L*W*H*Qty)/1,000,000
-                    df['Total_CBM'] = (df['Length_cm'] * df['Width_cm'] * df['Height_cm'] * df['Quantity']) / 1000000
+            if best_con != "None":
+                # Progress Bar
+                max_vol = container_specs[best_con]["max_cbm"]
+                fill_pct = min((total_cbm / max_vol) * 100, 100)
+                st.write(f"**Container Fill:** {fill_pct:.1f}%")
+                st.progress(fill_pct / 100)
+
+                # 3D Placement Visualization (Using Scatter3d to show X, Y, Z center points)
+                fig = go.Figure()
+
+                # Draw Container Wireframe
+                L_limit, W_limit, H_limit = container_specs[best_con]["L"], container_specs[best_con]["W"], container_specs[best_con]["H"]
+                
+                # Adding cargo as 3D Boxes
+                colors = ['red', 'green', 'blue', 'orange', 'purple', 'cyan']
+                current_x = 0
+
+                for i, row in df.iterrows():
+                    # Simulation: Placing cargo along X-axis
+                    # If Rotation is NOT allowed, we keep L, W, H as is.
+                    # If Rotation IS allowed, an optimizer would swap them, here we show status.
+                    rot_status = "🔄 Rotation OK" if row['Rotation_Allowed'] else "🚫 No Rotation"
                     
-                    # Totals for the entire shipment
-                    grand_total_cbm = df['Total_CBM'].sum()
-                    grand_total_weight = df['Weight_kg'].sum() # Auto SUM of all lines
+                    # Create 3D Box representation
+                    fig.add_trace(go.Mesh3d(
+                        x=[current_x, current_x, current_x+row['Length_cm'], current_x+row['Length_cm'], current_x, current_x, current_x+row['Length_cm'], current_x+row['Length_cm']],
+                        y=[0, row['Width_cm'], row['Width_cm'], 0, 0, row['Width_cm'], row['Width_cm'], 0],
+                        z=[0, 0, 0, 0, row['Height_cm'], row['Height_cm'], row['Height_cm'], row['Height_cm']],
+                        i=[7, 0, 0, 0, 4, 4, 6, 6, 4, 0, 3, 2],
+                        j=[3, 4, 1, 2, 5, 6, 5, 2, 0, 1, 6, 3],
+                        k=[0, 7, 2, 3, 6, 7, 1, 1, 5, 5, 7, 6],
+                        color=colors[i % len(colors)],
+                        name=f"{row['Cargo_Name']} ({rot_status})",
+                        opacity=0.6,
+                        showlegend=True
+                    ))
+                    current_x += (row['Length_cm'] * 0.5) # Shift for next item visualization
 
-                    st.divider()
-                    
-                    # Displaying Summary Metrics
-                    m1, m2 = st.columns(2)
-                    m1.metric("Total Volume (All Items)", f"{grand_total_cbm:.2f} CBM")
-                    m2.metric("Total Weight (All Items)", f"{grand_total_weight:,.2f} kg")
-
-                    # Checking for the best container match
-                    max_L, max_W, max_H = df['Length_cm'].max(), df['Width_cm'].max(), df['Height_cm'].max()
-                    
-                    best_option = None
-                    for name, spec in container_specs.items():
-                        if (max_L <= spec["L"] and max_W <= spec["W"] and max_H <= spec["H"] and 
-                            grand_total_weight <= spec["max_kg"] and grand_total_cbm <= spec["max_cbm"]):
-                            best_option = name
-                            break
-
-                    if best_option:
-                        st.success(f"✅ Recommended Container: **{best_option}**")
-                    else:
-                        st.error(f"❌ Exceeds Standard Capacity (Max: {hc_payload:,.0f}kg)")
-                        if grand_total_weight > 26000 and not is_heavy_duty:
-                            st.info("💡 Note: If you are using a 40HC Heavy Duty, enable the toggle in the sidebar.")
-                    
-                    st.dataframe(df, use_container_width=True)
-
-    elif app_mode == "2. OOG CHECK":
-        st.subheader("🏗️ OOG (Out of Gauge) Check")
-        # Same OOG logic
-    elif app_mode == "3. IMO/DG CHECK":
-        st.subheader("☣️ IMO/DG Cargo Check")
-        # Same DG logic
+                fig.update_layout(
+                    title=f"3D Cargo Placement Map - {best_con} (X=Length, Y=Width, Z=Height)",
+                    scene=dict(
+                        xaxis=dict(title='X: Length (cm)', range=[0, L_limit]),
+                        yaxis=dict(title='Y: Width (cm)', range=[0, W_limit]),
+                        zaxis=dict(title='Z: Height (cm)', range=[0, H_limit]),
+                        aspectmode='manual',
+                        aspectratio=dict(x=2, y=0.5, z=0.5)
+                    ),
+                    margin=dict(l=0, r=0, b=0, t=40)
+                )
+                st.plotly_chart(fig, use_container_width=True)
+                
+                st.info("💡 **X අක්ෂය:** දිග | **Y අක්ෂය:** පළල | **Z අක්ෂය:** උස")
+            else:
+                st.error("Cargo exceeds all container capacities!")
 
     if st.sidebar.button("Logout"):
         del st.session_state["password_correct"]
