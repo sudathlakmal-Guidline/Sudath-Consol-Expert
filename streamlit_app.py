@@ -20,22 +20,23 @@ if check_password():
     st.markdown("""
         <div style="background-color:#003366;padding:20px;border-radius:10px">
         <h1 style="color:white;text-align:center;">🚀 SUDATH CONSOL EXPERT</h1>
-        <h3 style="color:#FFCC00;text-align:center;">Logistics Intelligence Suite</h3>
+        <h3 style="color:#FFCC00;text-align:center;">Authorized Access Only - Logistics Intelligence Suite</h3>
         </div>
         """, unsafe_allow_html=True)
 
+    # Updated Container Specs with exact Internal Dimensions (Length, Width, Height)
     container_specs = {
-        "20GP": {"max_cbm": 28.0, "max_kg": 26000, "max_h": 2.38},
-        "40GP": {"max_cbm": 55.0, "max_kg": 26000, "max_h": 2.38},
-        "40HC": {"max_cbm": 68.0, "max_kg": 26500, "max_h": 2.69}
+        "20GP": {"max_cbm": 28.0, "max_kg": 26000, "L": 585, "W": 230, "H": 228},
+        "40GP": {"max_cbm": 55.0, "max_kg": 26000, "L": 1200, "W": 230, "H": 228},
+        "40HC": {"max_cbm": 68.0, "max_kg": 26500, "L": 1200, "W": 230, "H": 265}
     }
 
-    st.sidebar.header("Settings")
-    weight_mode = st.sidebar.radio("Weight Input Mode:", ["Weight is Per Unit", "Weight is Total per Line"])
+    st.sidebar.header("Navigation")
     app_mode = st.sidebar.selectbox("Choose Service:", ["Standard Consolidation", "OOG Handling", "DG Compliance"])
 
     if app_mode == "Standard Consolidation":
         st.subheader("📦 Standard Container Loading Planner")
+        st.info("💡 Note: Please enter the **Total Weight** for the entire quantity in the 'Weight_kg' column.")
         
         initial_df = pd.DataFrame(columns=["Cargo_Name", "Length_cm", "Width_cm", "Height_cm", "Quantity", "Weight_kg"])
         df = st.data_editor(initial_df, num_rows="dynamic")
@@ -48,48 +49,73 @@ if check_password():
                     df = df.dropna()
 
                     if not df.empty:
-                        # CBM ගණනය කිරීම
                         df['Total_CBM'] = (df['Length_cm'] * df['Width_cm'] * df['Height_cm'] * df['Quantity']) / 1000000
                         
-                        # Weight ගණනය කිරීම (මෙහිදී ඔබ තේරූ Mode එක අනුව ක්‍රියා කරයි)
-                        if weight_mode == "Weight is Per Unit":
-                            df['Total_Weight'] = df['Weight_kg'] * df['Quantity']
-                        else:
-                            df['Total_Weight'] = df['Weight_kg']
-                        
                         total_cbm = df['Total_CBM'].sum()
-                        total_kg = df['Total_Weight'].sum()
-                        max_item_h = df['Height_cm'].max() / 100
+                        total_kg = df['Weight_kg'].sum() # Treating input as Total Line Weight
+                        
+                        # Get max dimensions of a single unit to check fitment
+                        max_L = df['Length_cm'].max()
+                        max_W = df['Width_cm'].max()
+                        max_H = df['Height_cm'].max()
 
                         st.divider()
                         c1, c2 = st.columns(2)
                         c1.metric("Total Volume", f"{total_cbm:.2f} CBM")
-                        c2.metric("Total Weight", f"{total_kg:,.2f} kg") # දහස්ස්ථාන වෙන් කර පෙන්වයි
+                        c2.metric("Total Weight", f"{total_kg:,.2f} kg")
 
-                        # --- Container Logic ---
+                        # --- SMART CONTAINER RECOMMENDATION ---
                         best_con = None
+                        rejection_reasons = {}
+
                         for con, specs in container_specs.items():
-                            if total_cbm <= specs["max_cbm"] and total_kg <= specs["max_kg"] and max_item_h <= specs["max_h"]:
+                            reasons = []
+                            # Dimension Check (Fitment)
+                            if max_L > specs["L"]: reasons.append(f"Cargo Length ({max_L}cm) exceeds {con} limit ({specs['L']}cm)")
+                            if max_W > specs["W"]: reasons.append(f"Cargo Width ({max_W}cm) exceeds {con} limit ({specs['W']}cm)")
+                            if max_H > specs["H"]: reasons.append(f"Cargo Height ({max_H}cm) exceeds {con} limit ({specs['H']}cm)")
+                            
+                            # Capacity Check
+                            if total_cbm > specs["max_cbm"]: reasons.append(f"Total Volume ({total_cbm:.2f} CBM) exceeds {con} limit ({specs['max_cbm']} CBM)")
+                            if total_kg > specs["max_kg"]: reasons.append(f"Total Weight ({total_kg:,.2f} kg) exceeds {con} limit ({specs['max_kg']} kg)")
+
+                            if not reasons:
                                 best_con = con
                                 break
+                            else:
+                                rejection_reasons[con] = reasons
                         
                         if best_con:
                             st.success(f"✅ Recommended Container: **{best_con}**")
-                            st.info(f"📊 Remaining Space: {specs['max_cbm']-total_cbm:.2f} CBM | Remaining Weight: {specs['max_kg']-total_kg:,.2f} kg")
+                            bal_cbm = container_specs[best_con]["max_cbm"] - total_cbm
+                            bal_kg = container_specs[best_con]["max_kg"] - total_kg
+                            st.info(f"📊 **Remaining Space in {best_con}:** {bal_cbm:.2f} CBM | **Remaining Weight:** {bal_kg:,.2f} kg")
                         else:
-                            st.warning("⚠️ High Load! Capacity Exceeded.")
+                            st.warning("⚠️ High Load or Oversized Cargo! Single standard container limit exceeded.")
 
-                        # Why not 20GP analysis
-                        if best_con != "20GP":
+                        # --- WHY NOT 20GP Analysis ---
+                        if best_con != "20GP" and "20GP" in rejection_reasons:
                             st.markdown("### 🔍 Why not 20GP?")
-                            if total_kg > 26000: st.error(f"❌ Weight exceeds 20GP limit ({total_kg:,.2f} > 26,000 kg)")
-                            if total_cbm > 28: st.error(f"❌ Volume exceeds 20GP limit ({total_cbm:.2f} > 28 CBM)")
+                            for r in rejection_reasons["20GP"]:
+                                st.error(f"❌ {r}")
+                            
+                            # Suggestion to fit in 20GP
+                            st.markdown("### ⚖️ Optimization for 20GP")
+                            to_hold = []
+                            for _, row in df.iterrows():
+                                if row['Length_cm'] > 585 or row['Width_cm'] > 230 or row['Height_cm'] > 228:
+                                    to_hold.append(f"{row['Cargo_Name']} (Oversized)")
+                            
+                            if to_hold:
+                                st.warning(f"💡 To use a **20GP**, you MUST REMOVE these oversized shipments: **{', '.join(to_hold)}**")
 
                         st.write("### 📋 Loading Details")
                         st.dataframe(df)
 
-                except Exception:
-                    st.error("🚫 Calculation failed. Please enter valid numbers.")
+                except Exception as e:
+                    st.error("🚫 දත්ත ඇතුළත් කිරීමේදී වැරැද්දක් වී ඇත. කරුණාකර අංක පමණක් භාවිතා කරන්න.")
+            else:
+                st.info("💡 Please enter cargo details in the table.")
 
     if st.sidebar.button("Logout"):
         del st.session_state["password_correct"]
