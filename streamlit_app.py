@@ -23,7 +23,7 @@ if check_password():
     st.markdown("""
         <div style="background-color:#002b5e;padding:20px;border-radius:10px;border-bottom: 5px solid #FFCC00;margin-bottom:20px;">
         <h1 style="color:white;text-align:center;margin:0;">🚢 SUDATH LOGISTICS INTELLIGENCE</h1>
-        <p style="color:#FFCC00;text-align:center;font-size:18px;margin:5px;">Advanced 3D Multi-Unit Cargo & Space Optimization</p>
+        <p style="color:#FFCC00;text-align:center;font-size:18px;margin:5px;">3D Cargo Placement & Color-Coded Identification</p>
         </div>
         """, unsafe_allow_html=True)
 
@@ -46,10 +46,10 @@ if check_password():
     }
 
     if app_mode == "1. CONSOL PLANNING":
-        st.subheader("📦 Standard Consolidation & 3D Space Analysis")
+        st.subheader("📦 Standard Consolidation & 3D Visual Index")
         
         initial_df = pd.DataFrame(columns=["Cargo_Name", "Length_cm", "Width_cm", "Height_cm", "Quantity", "Weight_kg", "Rotation_Allowed"])
-        df = st.data_editor(initial_df, num_rows="dynamic", key="sudath_consol_v10")
+        df = st.data_editor(initial_df, num_rows="dynamic", key="sudath_consol_v12")
 
         if st.button("Generate 3D Loading Plan"):
             if not df.empty:
@@ -58,9 +58,7 @@ if check_password():
                 
                 total_cbm = ((df['Length_cm'] * df['Width_cm'] * df['Height_cm'] * df['Quantity']) / 1000000).sum()
                 total_wgt = df['Weight_kg'].sum()
-                total_qty = df['Quantity'].sum()
 
-                # Best Container Recommendation
                 best_con = next((name for name, spec in container_specs.items() if total_cbm <= spec["max_cbm"] and total_wgt <= spec["max_kg"]), "None")
 
                 if best_con != "None":
@@ -68,31 +66,25 @@ if check_password():
                     fill_pct = min((total_cbm / max_vol) * 100, 100)
                     remaining_cbm = max_vol - total_cbm
 
-                    # 1. Summary Metrics
-                    st.divider()
-                    col1, col2, col3 = st.columns(3)
-                    col1.metric("Total Quantity", f"{int(total_qty)} Pcs")
-                    col2.metric("Total Weight", f"{total_wgt:,.0f} kg")
-                    col3.metric("Total Volume", f"{total_cbm:.2f} CBM")
-
-                    # 2. Space Utilization Progress Bar
+                    # Space Analysis
                     st.write(f"### 📊 Container Utilization: {best_con}")
                     st.progress(fill_pct / 100)
-                    
-                    p1, p2 = st.columns(2)
-                    p1.markdown(f"**Filled Space:** `{fill_pct:.1f}%`")
-                    p2.markdown(f"**Remaining Capacity:** `{remaining_cbm:.2f} CBM`")
-                    st.success(f"Recommended: {best_con}")
+                    st.write(f"**Filled:** `{fill_pct:.1f}%` | **Remaining:** `{remaining_cbm:.2f} CBM`")
 
-                    # 3. 3D Visualization
+                    # 3D Visualization
                     fig = go.Figure()
                     L_limit, W_limit, H_limit = container_specs[best_con]["L"], container_specs[best_con]["W"], container_specs[best_con]["H"]
                     
-                    colors = ['red', 'green', 'blue', 'orange', 'purple', 'cyan']
+                    colors = ['red', 'green', 'blue', 'orange', 'purple', 'cyan', 'yellow', 'brown']
                     curr_x, curr_y, curr_z = 0, 0, 0
                     
+                    # Store data for the Legend
+                    legend_data = []
+
                     for idx, row in df.iterrows():
                         color = colors[idx % len(colors)]
+                        legend_data.append({"Cargo": row['Cargo_Name'], "Color": color})
+                        
                         for n in range(int(row['Quantity'])):
                             dx, dy, dz = row['Length_cm'], row['Width_cm'], row['Height_cm']
                             
@@ -103,7 +95,7 @@ if check_password():
                                 i=[7, 0, 0, 0, 4, 4, 6, 6, 4, 0, 3, 2],
                                 j=[3, 4, 1, 2, 5, 6, 5, 2, 0, 1, 6, 3],
                                 k=[0, 7, 2, 3, 6, 7, 1, 1, 5, 5, 7, 6],
-                                color=color, opacity=0.5, name=f"{row['Cargo_Name']} {n+1}"
+                                color=color, opacity=0.6, name=f"{row['Cargo_Name']}"
                             ))
                             curr_x += dx
                             if curr_x + dx > L_limit:
@@ -113,21 +105,25 @@ if check_password():
                                 curr_y = 0
                                 curr_z += dz
 
-                    fig.update_layout(
-                        scene=dict(
-                            xaxis=dict(title='Length (X)', range=[0, L_limit]),
-                            yaxis=dict(title='Width (Y)', range=[0, W_limit]),
-                            zaxis=dict(title='Height (Z)', range=[0, H_limit]),
-                            aspectmode='manual', aspectratio=dict(x=2, y=0.5, z=0.5)
-                        ),
-                        margin=dict(l=0, r=0, b=0, t=0)
-                    )
+                    fig.update_layout(scene=dict(xaxis_title='Length (X)', yaxis_title='Width (Y)', zaxis_title='Height (Z)'))
                     st.plotly_chart(fig, use_container_width=True)
+
+                    # --- 🎨 COLOR LEGEND (ඔබ ඉල්ලූ කොටස) ---
+                    st.markdown("### 🏷️ Cargo Color Key")
+                    cols = st.columns(len(legend_data))
+                    for i, item in enumerate(legend_data):
+                        with cols[i]:
+                            st.markdown(f"""
+                                <div style="display: flex; align-items: center; margin-bottom: 10px;">
+                                    <div style="width: 20px; height: 20px; background-color: {item['Color']}; border: 1px solid black; margin-right: 10px;"></div>
+                                    <span style="font-weight: bold;">{item['Cargo']}</span>
+                                </div>
+                            """, unsafe_allow_html=True)
                 else:
-                    st.error("❌ Exceeds Container Limits! Please split the shipment.")
+                    st.error("❌ Does not fit in any standard container.")
 
     elif app_mode == "2. OOG CHECK":
-        st.subheader("🏗️ OOG (Out of Gauge) Check")
+        st.subheader("🏗️ OOG Check")
     elif app_mode == "3. IMO/DG CHECK":
         st.subheader("☣️ IMO/DG Segregation")
 
