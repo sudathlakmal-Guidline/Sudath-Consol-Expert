@@ -4,7 +4,7 @@ import pandas as pd
 # Page Configuration
 st.set_page_config(page_title="Sudath Logistics Expert", layout="wide", page_icon="🚢")
 
-# --- IMDG Segregation Matrix Logic ---
+# --- IMDG Segregation Logic ---
 seg_matrix = {
     "2.1": {"2.1": "X", "2.2": "0", "3": "2", "4.1": "0", "5.1": "2", "8": "1"},
     "3":   {"2.1": "2", "2.2": "0", "3": "X", "4.1": "0", "5.1": "2", "8": "0"},
@@ -12,11 +12,11 @@ seg_matrix = {
     "8":   {"2.1": "1", "2.2": "0", "3": "0", "4.1": "1", "5.1": "2", "8": "X"}
 }
 
-# --- Password Authentication ---
+# --- Password System ---
 def check_password():
     if "password_correct" not in st.session_state:
         st.markdown("<h2 style='text-align: center;'>🔐 Admin Login Required</h2>", unsafe_allow_html=True)
-        password = st.text_input("Please enter Admin Password:", type="password")
+        password = st.text_input("Password:", type="password")
         if st.button("Login"):
             if password == "sudath123":
                 st.session_state["password_correct"] = True
@@ -27,12 +27,26 @@ def check_password():
     return True
 
 if check_password():
+    # Header Section
     st.markdown("""
-        <div style="background-color:#002b5e;padding:20px;border-radius:10px;border-bottom: 5px solid #FFCC00;">
-        <h1 style="color:white;text-align:center;">🚢 SUDATH LOGISTICS INTELLIGENCE</h1>
-        <h3 style="color:#FFCC00;text-align:center;">Colombo Port Global Export Command Center</h3>
+        <div style="background-color:#002b5e;padding:20px;border-radius:10px;border-bottom: 5px solid #FFCC00;margin-bottom:20px;">
+        <h1 style="color:white;text-align:center;margin:0;">🚢 SUDATH LOGISTICS INTELLIGENCE</h1>
+        <p style="color:#FFCC00;text-align:center;font-size:18px;margin:5px;">Colombo Port Command Center - Global Export Expert</p>
         </div>
         """, unsafe_allow_html=True)
+
+    # --- UPDATED NAVIGATION (No Dropdown) ---
+    st.sidebar.markdown("### 🛠️ SELECT SERVICE")
+    app_mode = st.sidebar.radio(
+        "Choose an Option:",
+        [
+            "1. CONSOL PLANNING", 
+            "2. OOG (Out of Gauge) CHECK", 
+            "3. IMO/DG (Dangerous Goods) CHECK"
+        ],
+        index=0
+    )
+    st.sidebar.divider()
 
     # Container Specs
     container_specs = {
@@ -41,14 +55,7 @@ if check_password():
         "40HC": {"max_cbm": 68.0, "max_kg": 26500, "L": 1200, "W": 230, "H": 265}
     }
 
-    # Custom Navigation per user request
-    st.sidebar.header("Select Service")
-    app_mode = st.sidebar.radio(
-        "Navigation:",
-        ["1. CONSOL PLANNING", "2. OOG CHECK", "3. IMO/DG CARGO CHECK"]
-    )
-
-    # --- MODULE 1: CONSOL PLANNING ---
+    # --- 1. CONSOL PLANNING ---
     if app_mode == "1. CONSOL PLANNING":
         st.subheader("📦 Standard Consolidation Planner")
         initial_df = pd.DataFrame(columns=["Cargo_Name", "Length_cm", "Width_cm", "Height_cm", "Quantity", "Weight_kg"])
@@ -56,52 +63,34 @@ if check_password():
 
         if st.button("Generate Loading Plan"):
             if not df.empty:
-                df[['Length_cm', 'Width_cm', 'Height_cm', 'Quantity', 'Weight_kg']] = df[['Length_cm', 'Width_cm', 'Height_cm', 'Quantity', 'Weight_kg']].apply(pd.to_numeric, errors='coerce')
-                df = df.dropna()
-                
-                max_L, max_W, max_H = df['Length_cm'].max(), df['Width_cm'].max(), df['Height_cm'].max()
-                total_kg = df['Weight_kg'].sum()
-                total_cbm = (df['Length_cm'] * df['Width_cm'] * df['Height_cm'] * df['Quantity']).sum() / 1000000
+                try:
+                    df[['Length_cm', 'Width_cm', 'Height_cm', 'Quantity', 'Weight_kg']] = df[['Length_cm', 'Width_cm', 'Height_cm', 'Quantity', 'Weight_kg']].apply(pd.to_numeric, errors='coerce')
+                    df = df.dropna()
+                    
+                    max_L, max_W, max_H = df['Length_cm'].max(), df['Width_cm'].max(), df['Height_cm'].max()
+                    total_kg = df['Weight_kg'].sum()
+                    total_cbm = (df['Length_cm'] * df['Width_cm'] * df['Height_cm'] * df['Quantity']).sum() / 1000000
 
-                st.divider()
-                best_con = next((c for c, s in container_specs.items() if max_L <= s["L"] and max_W <= s["W"] and max_H <= s["H"] and total_kg <= s["max_kg"] and total_cbm <= s["max_cbm"]), None)
-                
-                if best_con:
-                    st.success(f"✅ Recommended: **{best_con}**")
-                    st.metric("Total Volume", f"{total_cbm:.2f} CBM")
-                    st.metric("Total Weight", f"{total_kg:,.2f} kg")
-                else:
-                    st.warning("⚠️ High Volume/Weight: Requires multiple containers or OOG check.")
-                st.dataframe(df)
+                    st.divider()
+                    best_con = next((c for c, s in container_specs.items() if max_L <= s["L"] and max_W <= s["W"] and max_H <= s["H"] and total_kg <= s["max_kg"] and total_cbm <= s["max_cbm"]), None)
+                    
+                    col_m1, col_m2 = st.columns(2)
+                    col_m1.metric("Total Volume", f"{total_cbm:.2f} CBM")
+                    col_m2.metric("Total Weight", f"{total_kg:,.2f} kg")
 
-    # --- MODULE 2: OOG CHECK ---
-    elif app_mode == "2. OOG CHECK":
-        st.subheader("🏗️ Out of Gauge (OOG) & Special Equipment Advisor")
-        st.info("Use this to check cargo exceeding standard container dimensions (1200x230x265cm).")
+                    if best_con:
+                        st.success(f"✅ Recommended Container: **{best_con}**")
+                    else:
+                        st.warning("⚠️ Capacity Alert: Cargo exceeds standard single container limits. Check OOG or multi-load.")
+                    st.dataframe(df, use_container_width=True)
+                except:
+                    st.error("Please ensure all dimension fields are numeric.")
+
+    # --- 2. OOG CHECK ---
+    elif app_mode == "2. OOG (Out of Gauge) CHECK":
+        st.subheader("🏗️ OOG & Special Equipment Advisor")
+        st.markdown("Enter dimensions to identify **Non-Containerized** cargo requirements.")
         
-        o_l = st.number_input("Cargo Length (cm):", value=0)
-        o_w = st.number_input("Cargo Width (cm):", value=0)
-        o_h = st.number_input("Cargo Height (cm):", value=0)
-
-        if st.button("Verify Equipment"):
-            st.divider()
-            if o_l > 1200:
-                st.error("🚨 BREAK BULK / FLAT BED REQUIRED")
-                st.write("Reason: Length exceeds 40ft Flat Rack limits.")
-            elif o_w > 230 or o_h > 265:
-                if o_h > 265 and o_w <= 230:
-                    st.warning("🔝 OPEN TOP (OT) RECOMMENDED")
-                else:
-                    st.warning("🛡️ FLAT RACK (FR) RECOMMENDED")
-            else:
-                st.success("✅ This cargo can fit in a Standard 40HC container.")
-
-    # --- MODULE 3: IMO/DG CARGO CHECK ---
-    elif app_mode == "3. IMO/DG CARGO CHECK":
-        st.subheader("☣️ IMDG Dangerous Goods & Colombo Customs Compliance")
-        
-        c1, c2 = st.columns(2)
-        with c1:
-            imdg_class = st.selectbox("IMDG Class:", ["2.1", "3", "4.1", "5.1", "6.1", "8", "9"])
-            un_no = st.text_input("UN Number:")
-            carrier = st.selectbox("Shipping Line:", ["Ma
+        with st.container(border=True):
+            col_o1, col_o2, col_o3 = st.columns(3)
+            o_l = col_o1.
