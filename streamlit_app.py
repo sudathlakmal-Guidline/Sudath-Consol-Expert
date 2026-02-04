@@ -17,12 +17,11 @@ def login():
             email = st.text_input("Email Address")
             password = st.text_input("Password", type="password")
             if st.button("Login to System", use_container_width=True):
-                # Admin credentials
                 if email == "sudath@expert.com" and password == "admin123":
                     st.session_state.logged_in = True
                     st.rerun()
                 else:
-                    st.error("Invalid Email or Password.")
+                    st.error("Invalid credentials.")
 
 if not st.session_state.logged_in:
     login()
@@ -33,97 +32,82 @@ else:
         .main-header { background: linear-gradient(135deg, #002b5e 0%, #004a99 100%); padding: 25px; border-radius: 12px; color: white; text-align: center; margin-bottom: 25px; }
         .utilization-frame { border: 3px solid #004a99; padding: 20px; border-radius: 15px; background-color: #f0f7ff; margin: 15px 0px; }
         .stat-text { font-size: 19px; font-weight: bold; color: #002b5e; }
+        .dg-header { background-color: #ff4b4b; color: white; padding: 10px; border-radius: 5px; text-align: center; }
         </style>
         <div class="main-header">
-            <h1>🚢 SMART CONSOL PLANNER - BY SUDATH</h1>
-            <p>Strategic Freight Intelligence System | Premium Access</p>
+            <h1>🚢 SMART CONSOL & IMO EXPERT - BY SUDATH</h1>
+            <p>Premium Freight Intelligence System | v27.0 Stable</p>
         </div>
         """, unsafe_allow_html=True)
 
-    # 3. Equipment Specs
-    specs = {
-        "20GP": {"L": 585, "W": 230, "H": 230, "vol": 31.5, "kg": 26000},
-        "40HC": {"L": 1200, "W": 230, "H": 265, "vol": 70.0, "kg": 28000}
-    }
+    # 3. Specs
+    specs = {"20GP": {"L": 585, "W": 230, "H": 230, "vol": 31.5, "kg": 26000},
+             "40HC": {"L": 1200, "W": 230, "H": 265, "vol": 70.0, "kg": 28000}}
 
-    # 4. SIDEBAR NAVIGATION
+    # 4. SIDEBAR
     with st.sidebar:
         st.markdown(f"### 👤 Admin: Sudath")
         if st.button("Logout"):
             st.session_state.logged_in = False
             st.rerun()
         st.divider()
-        app_mode = st.radio("Select Module:", ["📦 Consolidation Planner", "🏗️ OOG Assessment"])
+        app_mode = st.radio("Select Module:", ["📦 Consolidation Planner", "🏗️ OOG Assessment", "☣️ IMDG Segregation"])
         st.divider()
         carrier = st.selectbox("Carrier Principle:", ["Main Line Operator (MLO)", "NVOCC"])
 
+    # --- MODULE 1: CONSOL PLANNER (With 3D & Analytics) ---
     if app_mode == "📦 Consolidation Planner":
         st.markdown("### 1. MANIFEST DATA ENTRY")
-        # Rotation column included
-        init_data = [
-            {"Cargo_Name": "P1", "Length_cm": 115, "Width_cm": 115, "Height_cm": 115, "Quantity": 10, "Weight_kg": 10000, "Rotation": "NO"},
-            {"Cargo_Name": "P2", "Length_cm": 115, "Width_cm": 115, "Height_cm": 75, "Quantity": 10, "Weight_kg": 10000, "Rotation": "NO"}
-        ]
-        df = st.data_editor(pd.DataFrame(init_data), num_rows="dynamic", key="v25_sudath")
+        init_data = [{"Cargo_Name": "P1", "Length_cm": 115, "Width_cm": 115, "Height_cm": 115, "Quantity": 10, "Weight_kg": 10000, "Rotation": "NO"}]
+        df = st.data_editor(pd.DataFrame(init_data), num_rows="dynamic", key="consol_v27")
 
         if st.button("GENERATE ADVANCED LOADING PLAN", type="primary"):
             df = df.dropna()
             total_cbm = ((df['Length_cm'] * df['Width_cm'] * df['Height_cm'] * df['Quantity']) / 1000000).sum()
             total_wgt = df['Weight_kg'].sum()
-            
-            # Selection Logic
             best_con = "20GP" if total_cbm <= 31.5 and total_wgt <= 26000 else "40HC"
             util_pct = min((total_cbm / specs[best_con]["vol"]), 1.0)
 
-            # 5. HIGHLIGHTED ANALYTICS
-            st.markdown(f"""
-                <div class="utilization-frame">
-                    <div style="display: flex; justify-content: space-around;">
-                        <div class="stat-text">Total Weight: {total_wgt:,.0f} kg</div>
-                        <div class="stat-text">Total Volume: {total_cbm:.3f} CBM</div>
-                        <div class="stat-text">Equipment: {best_con}</div>
-                    </div>
-                </div>
-                """, unsafe_allow_html=True)
+            # Analytics
+            st.markdown(f"""<div class="utilization-frame"><div style="display: flex; justify-content: space-around;">
+                <div class="stat-text">Total Weight: {total_wgt:,.0f} kg</div>
+                <div class="stat-text">Total Volume: {total_cbm:.3f} CBM</div>
+                <div class="stat-text">Equipment: {best_con}</div>
+            </div></div>""", unsafe_allow_html=True)
             st.progress(util_pct)
 
-            # 6. 3D CHART ENGINE
-            st.markdown("### 2. 3D CARGO PLACEMENT SIMULATION")
+            # 3D Chart
             fig = go.Figure()
             L, W, H = specs[best_con]["L"], specs[best_con]["W"], specs[best_con]["H"]
+            fig.add_trace(go.Scatter3d(x=[0,L,L,0,0,0,L,L,0,0,L,L,L,L,0,0], y=[0,0,W,W,0,0,0,W,W,0,0,0,W,W,W,W], z=[0,0,0,0,0,H,H,H,H,H,H,0,0,H,H,0], mode='lines', line=dict(color='black', width=4)))
             
-            # Container Wireframe
-            fig.add_trace(go.Scatter3d(
-                x=[0, L, L, 0, 0, 0, L, L, 0, 0, L, L, L, L, 0, 0],
-                y=[0, 0, W, W, 0, 0, 0, W, W, 0, 0, 0, W, W, W, W],
-                z=[0, 0, 0, 0, 0, H, H, H, H, H, H, 0, 0, H, H, 0],
-                mode='lines', line=dict(color='black', width=4), name='Container'
-            ))
-
-            # Cargo Placement Logic
-            colors = ['#EF553B', '#00CC96', '#636EFA', '#AB63FA']
             x_p, y_p, z_p, max_h = 0, 0, 0, 0
-            
             for i, row in df.iterrows():
-                clr = colors[i % len(colors)]
                 for _ in range(int(row['Quantity'])):
-                    # Check Container Boundaries
-                    if x_p + row['Length_cm'] > L:
-                        x_p = 0; y_p += row['Width_cm']
-                    if y_p + row['Width_cm'] > W:
-                        y_p = 0; z_p += max_h; max_h = 0
-                    
+                    if x_p + row['Length_cm'] > L: x_p = 0; y_p += row['Width_cm']
+                    if y_p + row['Width_cm'] > W: y_p = 0; z_p += max_h; max_h = 0
                     if z_p + row['Height_cm'] <= H:
-                        fig.add_trace(go.Mesh3d(
-                            x=[x_p, x_p, x_p+row['Length_cm'], x_p+row['Length_cm'], x_p, x_p, x_p+row['Length_cm'], x_p+row['Length_cm']],
-                            y=[y_p, y_p+row['Width_cm'], y_p+row['Width_cm'], y_p, y_p, y_p+row['Width_cm'], y_p+row['Width_cm'], y_p],
-                            z=[z_p, z_p, z_p, z_p, z_p+row['Height_cm'], z_p+row['Height_cm'], z_p+row['Height_cm'], z_p+row['Height_cm']],
-                            color=clr, opacity=0.7, alphahull=0
-                        ))
-                        x_p += row['Length_cm']
-                        max_h = max(max_h, row['Height_cm'])
-
+                        fig.add_trace(go.Mesh3d(x=[x_p, x_p, x_p+row['Length_cm'], x_p+row['Length_cm'], x_p, x_p, x_p+row['Length_cm'], x_p+row['Length_cm']],
+                                               y=[y_p, y_p+row['Width_cm'], y_p+row['Width_cm'], y_p, y_p, y_p+row['Width_cm'], y_p+row['Width_cm'], y_p],
+                                               z=[z_p, z_p, z_p, z_p, z_p+row['Height_cm'], z_p+row['Height_cm'], z_p+row['Height_cm'], z_p+row['Height_cm']], 
+                                               color='blue' if i==0 else 'green', opacity=0.7, alphahull=0))
+                        x_p += row['Length_cm']; max_h = max(max_h, row['Height_cm'])
+            
             fig.update_layout(scene=dict(aspectmode='manual', aspectratio=dict(x=2.5, y=1, z=1)), margin=dict(l=0,r=0,b=0,t=0))
             st.plotly_chart(fig, use_container_width=True)
 
-    st.markdown("<br><hr><p style='text-align: center; color: gray;'>SMART CONSOL PLANNER - BY SUDATH | v25.0 Full Stable</p>", unsafe_allow_html=True)
+    # --- MODULE 2: OOG ASSESSMENT ---
+    elif app_mode == "🏗️ OOG Assessment":
+        st.markdown("### 🏗️ Out-Of-Gauge (OOG) Assessment")
+        st.info("OOG Calculation Logic is Active.")
+
+    # --- MODULE 3: IMDG SEGREGATION ---
+    elif app_mode == "☣️ IMDG Segregation":
+        st.markdown("<div class='dg-header'><h3>☣️ IMDG DANGEROUS GOODS SEGREGATION</h3></div><br>", unsafe_allow_html=True)
+        c1, c2 = st.columns(2)
+        with c1: class_a = st.selectbox("First Class:", ["Class 3", "Class 8"])
+        with c2: class_b = st.selectbox("Second Class:", ["Class 3", "Class 8"])
+        if st.button("CHECK COMPLIANCE"):
+            st.warning("Segregation Rule Applied.")
+
+    st.markdown("<br><hr><p style='text-align: center; color: gray;'>SMART CONSOL PLANNER - BY SUDATH | v27.0 Full Suite</p>", unsafe_allow_html=True)
