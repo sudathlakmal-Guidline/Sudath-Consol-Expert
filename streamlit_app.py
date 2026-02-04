@@ -93,4 +93,55 @@ if check_password():
         
         with st.container(border=True):
             col_o1, col_o2, col_o3 = st.columns(3)
-            o_l = col_o1.
+            o_l = col_o1.number_input("Length (cm):", min_value=0)
+            o_w = col_o2.number_input("Width (cm):", min_value=0)
+            o_h = col_o3.number_input("Height (cm):", min_value=0)
+
+        if st.button("Analyze Equipment Type"):
+            st.divider()
+            if o_l > 1200:
+                st.error("🚨 EQUIPMENT: BREAK BULK / FLAT BED")
+                st.info("Reason: Length exceeds 40ft container bed. Requires specialized vessel deck loading.")
+            elif o_w > 230 or o_h > 265:
+                if o_h > 265 and o_w <= 230:
+                    st.warning("🔝 EQUIPMENT: OPEN TOP (OT)")
+                    st.write("Over-height cargo. Suitable for top loading with tarpaulin.")
+                else:
+                    st.warning("🛡️ EQUIPMENT: FLAT RACK (FR)")
+                    st.write("Over-width/Over-height cargo. Side-loading or top-loading necessary.")
+            else:
+                st.success("✅ Cargo fits in a Standard 40HC Container.")
+
+    # --- 3. IMO/DG CARGO CHECK ---
+    elif app_mode == "3. IMO/DG (Dangerous Goods) CHECK":
+        st.subheader("☣️ IMDG Dangerous Goods Compliance")
+        
+        d1, d2 = st.columns(2)
+        with d1:
+            imdg_class = st.selectbox("Select IMDG Class:", ["2.1", "3", "4.1", "5.1", "6.1", "8", "9"])
+            un_no = st.text_input("UN Number (4 digits):")
+            carrier = st.selectbox("Carrier:", ["Maersk", "MSC", "Hapag-Lloyd", "CMA CGM", "ONE", "Other"])
+        
+        with d2:
+            st.markdown("### 📄 Colombo Customs & Export Docs")
+            st.info("""
+            * **DGD** (DG Declaration - 3 Sets)
+            * **MSDS** (Latest 16-section version)
+            * **CUSDEC** (Export Entry)
+            * **Boat Note / CDN**
+            """)
+
+        if st.button("Check Segregation & Marks"):
+            st.divider()
+            if imdg_class in seg_matrix:
+                st.subheader(f"Segregation Rules for Class {imdg_class}")
+                for other, rule in seg_matrix[imdg_class].items():
+                    if rule == "2": st.error(f"❌ **Separated from** Class {other} (min 6m apart)")
+                    if rule == "1": st.warning(f"⚠️ **Away from** Class {other} (min 3m apart)")
+            
+            st.write(f"**Note:** {carrier} requires final DG approval before the container gates into Port.")
+
+    # Sidebar Logout
+    if st.sidebar.button("Logout"):
+        del st.session_state["password_correct"]
+        st.rerun()
