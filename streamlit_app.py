@@ -2,105 +2,159 @@ import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
 from datetime import datetime
-import io
 
 # ==========================================
-# 1. CORE SYSTEM CONFIGURATION
+# 1. පද්ධති සැකසුම් (SYSTEM CONFIG)
 # ==========================================
-st.set_page_config(page_title="SUDATH LOGISTICS PRO", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(page_title="SMART CONSOL & IMO EXPERT - BY SUDATH", layout="wide")
 
-# --- CUSTOM CSS FOR PROFESSIONAL LOOK ---
+# වෘත්තීය පෙනුම සඳහා CSS
 st.markdown("""
     <style>
-    .report-header { background: linear-gradient(90deg, #001f3f 0%, #0074D9 100%); padding: 30px; border-radius: 15px; color: white; text-align: center; }
-    .metric-card { background-color: #ffffff; border: 1px solid #e0e0e0; padding: 15px; border-radius: 10px; box-shadow: 2px 2px 5px rgba(0,0,0,0.05); }
-    .dg-critical { border-left: 5px solid #FF4136; background-color: #FFFAFA; padding: 10px; }
+    .main-header { background: linear-gradient(135deg, #002b5e 0%, #004a99 100%); padding: 25px; border-radius: 12px; color: white; text-align: center; margin-bottom: 25px; }
+    .util-frame { border: 2px solid #004a99; padding: 20px; border-radius: 15px; background-color: #f8fbff; margin-bottom: 20px; }
+    .metric-val { font-size: 24px; font-weight: bold; color: #004a99; }
+    .dg-warning { background-color: #fff3f3; border-left: 5px solid #ff4b4b; padding: 15px; border-radius: 5px; }
     </style>
     """, unsafe_allow_html=True)
 
 # ==========================================
-# 2. SECURITY & AUTHENTICATION
+# 2. ආරක්ෂක පිවිසුම (LOGIN SYSTEM)
 # ==========================================
-if 'auth' not in st.session_state:
-    st.session_state.auth = False
+if 'logged_in' not in st.session_state:
+    st.session_state.logged_in = False
 
-def check_login():
-    st.markdown("<div class='report-header'><h1>🔐 FREIGHT INTELLIGENCE GATEWAY</h1></div><br>", unsafe_allow_html=True)
-    col1, col2, col3 = st.columns([1, 1.5, 1])
+def login_screen():
+    st.markdown("<h1 style='text-align: center;'>🔒 Restricted Access</h1>", unsafe_allow_html=True)
+    col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
-        with st.form("Login Form"):
-            u_email = st.text_input("Authorized Email", placeholder="sudath@expert.com")
-            u_pass = st.text_input("Access Key", type="password")
-            submitted = st.form_submit_button("UNLOCK SYSTEM", use_container_width=True)
-            if submitted:
-                if u_email == "sudath@expert.com" and u_pass == "admin123":
-                    st.session_state.auth = True
+        with st.form("login_form"):
+            email = st.text_input("Email Address")
+            pwd = st.text_input("Password", type="password")
+            if st.form_submit_button("LOGIN TO SYSTEM", use_container_width=True):
+                if email == "sudath@expert.com" and pwd == "admin123":
+                    st.session_state.logged_in = True
                     st.rerun()
                 else:
-                    st.error("Access Denied: Invalid Credentials")
+                    st.error("Invalid Login Details!")
 
-if not st.session_state.auth:
-    check_login()
+if not st.session_state.logged_in:
+    login_screen()
 else:
     # ==========================================
-    # 3. GLOBAL DATA & SPECS
+    # 3. ප්‍රධාන පද්ධතිය (MAIN INTERFACE)
     # ==========================================
-    EQ_SPECS = {
-        "20GP": {"L": 589, "W": 235, "H": 239, "Payload": 28200, "CBM": 33.1},
-        "40HC": {"L": 1203, "W": 235, "H": 269, "Payload": 28600, "CBM": 76.2}
+    st.markdown("""
+        <div class="main-header">
+            <h1>🚢 SMART CONSOL & IMO EXPERT - BY SUDATH</h1>
+            <p>Strategic Freight Intelligence System | v32.0 Premium Final</p>
+        </div>
+        """, unsafe_allow_html=True)
+
+    # Sidebar Navigation
+    with st.sidebar:
+        st.markdown(f"### 👤 User: Admin Sudath")
+        if st.button("LOGOUT"):
+            st.session_state.logged_in = False
+            st.rerun()
+        st.divider()
+        module = st.radio("SELECT OPERATIONAL MODULE:", 
+                          ["📦 Consolidation Planner", "🏗️ OOG Assessment", "☣️ IMDG Segregation"])
+        st.divider()
+        st.info(f"System Date: {datetime.now().strftime('%Y-%m-%d')}")
+
+    # CONTAINER SPECS
+    SPECS = {
+        "20GP": {"L": 585, "W": 230, "H": 230, "Cap": 31.5, "MaxKg": 26000},
+        "40HC": {"L": 1200, "W": 230, "H": 265, "Cap": 70.0, "MaxKg": 28500}
     }
 
     # ==========================================
-    # 4. SIDEBAR NAVIGATION
+    # 4. CONSOLIDATION MODULE
     # ==========================================
-    with st.sidebar:
-        st.image("https://cdn-icons-png.flaticon.com/512/3067/3067451.png", width=100)
-        st.title("SUDATH NAVIGATOR")
-        st.markdown(f"**User:** Admin Sudath\n**Session:** Active")
-        if st.button("🔒 LOGOUT"):
-            st.session_state.auth = False
-            st.rerun()
-        st.divider()
-        module = st.radio("SELECT MISSION CRITICAL MODULE:", 
-                          ["📦 CONSOL PLANNER", "🏗️ OOG ASSESSMENT", "☣️ IMDG COMPLIANCE"])
-        st.divider()
-        st.caption(f"System Time: {datetime.now().strftime('%H:%M:%S')}")
-
-    # ==========================================
-    # 5. MODULE 1: CONSOLIDATION PLANNER
-    # ==========================================
-    if module == "📦 CONSOL PLANNER":
-        st.markdown("<div class='report-header'><h2>📦 ADVANCED CONSOLIDATION ENGINE</h2></div><br>", unsafe_allow_html=True)
-        
-        # --- DATA INPUT SECTION ---
-        st.subheader("1. Manifest Load List")
-        input_df = pd.DataFrame([
-            {"Item": "Cargo_A", "L": 120, "W": 100, "H": 100, "Qty": 10, "Weight_kg": 500, "Stackable": True},
-            {"Item": "Cargo_B", "L": 200, "W": 120, "H": 150, "Qty": 5, "Weight_kg": 1200, "Stackable": False}
+    if module == "📦 Consolidation Planner":
+        st.subheader("1. MANIFEST LOAD LIST ENTRY")
+        init_df = pd.DataFrame([
+            {"Cargo_Name": "P1", "Length_cm": 115, "Width_cm": 115, "Height_cm": 115, "Quantity": 10, "Weight_kg": 1000},
+            {"Cargo_Name": "P2", "Length_cm": 115, "Width_cm": 115, "Height_cm": 75, "Quantity": 10, "Weight_kg": 500}
         ])
-        editor_df = st.data_editor(input_df, num_rows="dynamic", use_container_width=True, key="ed_v31")
+        input_df = st.data_editor(init_df, num_rows="dynamic", use_container_width=True, key="consol_v32")
 
-        # --- CALCULATION LOGIC ---
-        if st.button("🚀 INITIATE LOADING SIMULATION", use_container_width=True):
-            clean_df = editor_df.dropna()
-            tot_wgt = (clean_df['Weight_kg'] * clean_df['Qty']).sum()
-            tot_cbm = ((clean_df['L'] * clean_df['W'] * clean_df['H'] * clean_df['Qty']) / 1000000).sum()
+        if st.button("RUN ADVANCED LOADING SIMULATION", type="primary", use_container_width=True):
+            clean_df = input_df.dropna()
+            total_cbm = ((clean_df['Length_cm'] * clean_df['Width_cm'] * clean_df['Height_cm'] * clean_df['Quantity']) / 1000000).sum()
+            total_wgt = (clean_df['Weight_kg'] * clean_df['Quantity']).sum()
             
-            selected_eq = "20GP" if tot_cbm < 28 and tot_wgt < 26000 else "40HC"
+            # ප්ලෑන් එක තෝරා ගැනීම
+            best_eq = "20GP" if total_cbm <= 31.5 and total_wgt <= 26000 else "40HC"
             
-            # --- ANALYTICS CARDS ---
-            c1, c2, c3, c4 = st.columns(4)
-            with c1: st.metric("Total Weight", f"{tot_wgt:,.0f} kg")
-            with c2: st.metric("Total Volume", f"{tot_cbm:.2f} CBM")
-            with c3: st.metric("Best Equipment", selected_eq)
-            with c4: 
-                util = (tot_cbm / EQ_SPECS[selected_eq]['CBM']) * 100
-                st.metric("Utilization", f"{util:.1f}%")
+            # ANALYTICS DISPLAY
+            st.markdown("### 2. CONSOLIDATION ANALYTICS")
+            st.markdown(f"""
+                <div class="util-frame">
+                    <div style="display: flex; justify-content: space-around; text-align: center;">
+                        <div><p>Total Weight</p><p class="metric-val">{total_wgt:,.0f} kg</p></div>
+                        <div><p>Total Volume</p><p class="metric-val">{total_cbm:.3f} CBM</p></div>
+                        <div><p>Recommended Equipment</p><p class="metric-val">{best_eq}</p></div>
+                    </div>
+                </div>
+            """, unsafe_allow_html=True)
 
-            # --- 3D VISUALIZATION ENGINE ---
-            st.subheader("2. Loading Pattern (3D)")
+            # 3D SIMULATION ENGINE
+            st.subheader("3. 3D PLACEMENT VISUALIZATION")
             fig = go.Figure()
-            L, W, H = EQ_SPECS[selected_eq]["L"], EQ_SPECS[selected_eq]["W"], EQ_SPECS[selected_eq]["H"]
+            L_max, W_max, H_max = SPECS[best_eq]["L"], SPECS[best_eq]["W"], SPECS[best_eq]["H"]
             
-            # Container Frame
-            fig.add_trace(go.Scatter3d(x=
+            # Container Outline
+            fig.add_trace(go.Scatter3d(
+                x=[0,L_max,L_max,0,0,0,L_max,L_max,0,0,L_max,L_max,L_max,L_max,0,0],
+                y=[0,0,W_max,W_max,0,0,0,W_max,W_max,0,0,0,W_max,W_max,W_max,W_max],
+                z=[0,0,0,0,0,H_max,H_max,H_max,H_max,H_max,H_max,0,0,H_max,H_max,0],
+                mode='lines', line=dict(color='black', width=4), name='Container'
+            ))
+
+            # Cargo Placement Logic
+            curr_x, curr_y, curr_z, max_h_row = 0, 0, 0, 0
+            for i, row in clean_df.iterrows():
+                for _ in range(int(row['Quantity'])):
+                    if curr_x + row['Length_cm'] > L_max:
+                        curr_x = 0; curr_y += row['Width_cm']
+                    if curr_y + row['Width_cm'] > W_max:
+                        curr_y = 0; curr_z += max_h_row; max_h_row = 0
+                    
+                    if curr_z + row['Height_cm'] <= H_max:
+                        fig.add_trace(go.Mesh3d(
+                            x=[curr_x, curr_x, curr_x+row['Length_cm'], curr_x+row['Length_cm'], curr_x, curr_x, curr_x+row['Length_cm'], curr_x+row['Length_cm']],
+                            y=[curr_y, curr_y+row['Width_cm'], curr_y+row['Width_cm'], curr_y, curr_y, curr_y+row['Width_cm'], curr_y+row['Width_cm'], curr_y],
+                            z=[curr_z, curr_z, curr_z, curr_z, curr_z+row['Height_cm'], curr_z+row['Height_cm'], curr_z+row['Height_cm'], curr_z+row['Height_cm']],
+                            color=f"rgb({(i*50)%255}, 100, 200)", opacity=0.8, alphahull=0
+                        ))
+                        curr_x += row['Length_cm']
+                        max_h_row = max(max_h_row, row['Height_cm'])
+
+            fig.update_layout(scene=dict(aspectmode='manual', aspectratio=dict(x=2.5, y=1, z=1)), margin=dict(l=0,r=0,b=0,t=0))
+            st.plotly_chart(fig, use_container_width=True)
+
+    # ==========================================
+    # 5. OOG ASSESSMENT MODULE
+    # ==========================================
+    elif module == "🏗️ OOG Assessment":
+        st.subheader("🏗️ PROJECT CARGO & OOG ANALYZER")
+        with st.form("oog_calc"):
+            c1, c2, c3 = st.columns(3)
+            with c1: length = st.number_input("Length (cm)", value=1250)
+            with c2: width = st.number_input("Width (cm)", value=255)
+            with c3: height = st.number_input("Height (cm)", value=310)
+            if st.form_submit_button("RUN ASSESSMENT"):
+                if width > 230 or height > 260 or length > 1200:
+                    st.error("🚨 CARGO STATUS: OUT-OF-GAUGE (OOG)")
+                    st.info("Requirement: Flat Rack or Open Top equipment needed.")
+                else:
+                    st.success("✅ CARGO STATUS: IN-GAUGE (Standard Container)")
+
+    # ==========================================
+    # 6. IMDG MODULE
+    # ==========================================
+    elif module == "☣️ IMDG Segregation":
+        st.subheader("☣️ IMDG DG SEGREGATION COMPLIANCE")
+        imdg_data = {
