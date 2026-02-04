@@ -20,18 +20,18 @@ if check_password():
     st.markdown("""
         <div style="background-color:#003366;padding:20px;border-radius:10px">
         <h1 style="color:white;text-align:center;">🚀 SUDATH CONSOL EXPERT</h1>
-        <h3 style="color:#FFCC00;text-align:center;">Authorized Access Only - Logistics Intelligence Suite</h3>
+        <h3 style="color:#FFCC00;text-align:center;">Logistics Intelligence Suite</h3>
         </div>
         """, unsafe_allow_html=True)
 
-    # Container Specs
     container_specs = {
         "20GP": {"max_cbm": 28.0, "max_kg": 26000, "max_h": 2.38},
         "40GP": {"max_cbm": 55.0, "max_kg": 26000, "max_h": 2.38},
         "40HC": {"max_cbm": 68.0, "max_kg": 26500, "max_h": 2.69}
     }
 
-    st.sidebar.header("Navigation")
+    st.sidebar.header("Settings")
+    weight_mode = st.sidebar.radio("Weight Input Mode:", ["Weight is Per Unit", "Weight is Total per Line"])
     app_mode = st.sidebar.selectbox("Choose Service:", ["Standard Consolidation", "OOG Handling", "DG Compliance"])
 
     if app_mode == "Standard Consolidation":
@@ -48,8 +48,14 @@ if check_password():
                     df = df.dropna()
 
                     if not df.empty:
+                        # CBM ගණනය කිරීම
                         df['Total_CBM'] = (df['Length_cm'] * df['Width_cm'] * df['Height_cm'] * df['Quantity']) / 1000000
-                        df['Total_Weight'] = df['Weight_kg'] * df['Quantity']
+                        
+                        # Weight ගණනය කිරීම (මෙහිදී ඔබ තේරූ Mode එක අනුව ක්‍රියා කරයි)
+                        if weight_mode == "Weight is Per Unit":
+                            df['Total_Weight'] = df['Weight_kg'] * df['Quantity']
+                        else:
+                            df['Total_Weight'] = df['Weight_kg']
                         
                         total_cbm = df['Total_CBM'].sum()
                         total_kg = df['Total_Weight'].sum()
@@ -58,9 +64,9 @@ if check_password():
                         st.divider()
                         c1, c2 = st.columns(2)
                         c1.metric("Total Volume", f"{total_cbm:.2f} CBM")
-                        c2.metric("Total Weight", f"{total_kg:.2f} kg")
+                        c2.metric("Total Weight", f"{total_kg:,.2f} kg") # දහස්ස්ථාන වෙන් කර පෙන්වයි
 
-                        # --- LOGIC: Best Container Selection ---
+                        # --- Container Logic ---
                         best_con = None
                         for con, specs in container_specs.items():
                             if total_cbm <= specs["max_cbm"] and total_kg <= specs["max_kg"] and max_item_h <= specs["max_h"]:
@@ -69,51 +75,21 @@ if check_password():
                         
                         if best_con:
                             st.success(f"✅ Recommended Container: **{best_con}**")
-                            # Balance Space Calculation
-                            bal_cbm = container_specs[best_con]["max_cbm"] - total_cbm
-                            bal_kg = container_specs[best_con]["max_kg"] - total_kg
-                            st.info(f"📊 **Remaining Space in {best_con}:** {bal_cbm:.2f} CBM | **Remaining Weight:** {bal_kg:.2f} kg")
+                            st.info(f"📊 Remaining Space: {specs['max_cbm']-total_cbm:.2f} CBM | Remaining Weight: {specs['max_kg']-total_kg:,.2f} kg")
                         else:
-                            st.warning("⚠️ High Load! This total cargo exceeds a single 40HC container capacity.")
+                            st.warning("⚠️ High Load! Capacity Exceeded.")
 
-                        # --- ANALYSIS: Why not 20GP? ---
+                        # Why not 20GP analysis
                         if best_con != "20GP":
                             st.markdown("### 🔍 Why not 20GP?")
-                            reasons = []
-                            if total_cbm > container_specs["20GP"]["max_cbm"]:
-                                reasons.append(f"Volume exceeds 20GP limit ({total_cbm:.2f} > 28 CBM)")
-                            if total_kg > container_specs["20GP"]["max_kg"]:
-                                reasons.append(f"Weight exceeds 20GP limit ({total_kg:.2f} > 26,000 kg)")
-                            if max_item_h > container_specs["20GP"]["max_h"]:
-                                reasons.append(f"Cargo height ({max_item_h}m) is too tall for 20GP (Max 2.38m)")
+                            if total_kg > 26000: st.error(f"❌ Weight exceeds 20GP limit ({total_kg:,.2f} > 26,000 kg)")
+                            if total_cbm > 28: st.error(f"❌ Volume exceeds 20GP limit ({total_cbm:.2f} > 28 CBM)")
 
-                            for r in reasons: st.error(f"❌ {r}")
-
-                            # Decision Support: What to hold back for 20GP?
-                            st.markdown("### ⚖️ Optimization for 20GP")
-                            temp_df = df.sort_values(by='Total_CBM', ascending=False)
-                            running_cbm = 0
-                            to_load = []
-                            to_hold = []
-                            
-                            for _, row in temp_df.iterrows():
-                                if running_cbm + row['Total_CBM'] <= 28.0:
-                                    running_cbm += row['Total_CBM']
-                                    to_load.append(row['Cargo_Name'])
-                                else:
-                                    to_hold.append(row['Cargo_Name'])
-                            
-                            if to_hold:
-                                st.warning(f"💡 To fit into a **20GP**, you should **HOLD** these shipments: {', '.join(to_hold)}")
-                                st.write(f"✅ You can successfully load: {', '.join(to_load)}")
-
-                        st.write("### 📋 Full Loading Details")
+                        st.write("### 📋 Loading Details")
                         st.dataframe(df)
 
-                except Exception as e:
-                    st.error("🚫 Something went wrong. Check if all fields have valid numbers.")
-            else:
-                st.info("💡 Please enter cargo details in the table.")
+                except Exception:
+                    st.error("🚫 Calculation failed. Please enter valid numbers.")
 
     if st.sidebar.button("Logout"):
         del st.session_state["password_correct"]
