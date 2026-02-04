@@ -26,82 +26,85 @@ if check_password():
         </div>
         """, unsafe_allow_html=True)
 
-    # Sidebar Navigation
+    # Sidebar Navigation (Clean & Simple)
     st.sidebar.markdown("### 🛠️ SELECT SERVICE")
     app_mode = st.sidebar.radio(
         "Navigation:",
         ["1. CONSOL PLANNING", "2. OOG CHECK", "3. IMO/DG CHECK"]
     )
+    
+    # 40HC Heavy Duty Toggle (Only for special cases)
+    is_heavy_duty = st.sidebar.toggle("Enable 40HC Heavy Duty (28,000kg)")
+
+    # Container Specs - Weights are 26,000kg unless Heavy Duty 40HC is selected
+    hc_payload = 28000 if is_heavy_duty else 26000
+    container_specs = {
+        "20GP": {"max_cbm": 31.5, "max_kg": 26000, "L": 585, "W": 230, "H": 230},
+        "40GP": {"max_cbm": 58.0, "max_kg": 26000, "L": 1200, "W": 230, "H": 230},
+        "40HC": {"max_cbm": 70.0, "max_kg": hc_payload, "L": 1200, "W": 230, "H": 265}
+    }
 
     if app_mode == "1. CONSOL PLANNING":
         st.subheader("📦 Standard Consolidation Planner")
         
-        # Heavy Duty Mode Selection
-        is_heavy_duty = st.sidebar.toggle("Enable 40HC Heavy Duty Mode", help="Increase 40HC Payload to 28,000kg")
-
-        # Container Specs with your specific weight limits
-        hc_payload = 28000 if is_heavy_duty else 26000
-        
-        container_specs = {
-            "20GP": {"max_cbm": 31.5, "max_kg": 26000, "L": 585, "W": 230, "H": 230, "door_h": 228},
-            "40GP": {"max_cbm": 58.0, "max_kg": 26000, "L": 1200, "W": 230, "H": 230, "door_h": 228},
-            "40HC": {"max_cbm": 70.0, "max_kg": hc_payload, "L": 1200, "W": 230, "H": 265, "door_h": 258}
-        }
-
-        if st.button("🗑️ Clear All Data"):
+        if st.button("🗑️ Reset All Data"):
             st.cache_data.clear()
             st.rerun()
 
-        initial_df = pd.DataFrame(columns=["Cargo_Name", "Length_cm", "Width_cm", "Height_cm", "Quantity", "Weight_Per_Unit_kg"])
-        df = st.data_editor(initial_df, num_rows="dynamic", key="consol_v4")
+        # Input Table (Simplified)
+        # Note: Weight_kg is treated as the total weight for that specific shipment/line
+        initial_df = pd.DataFrame(columns=["Cargo_Name", "Length_cm", "Width_cm", "Height_cm", "Quantity", "Weight_kg"])
+        df = st.data_editor(initial_df, num_rows="dynamic", key="sudath_editor_final")
 
         if st.button("Generate Loading Plan"):
             if not df.empty:
-                df = df.dropna(subset=["Length_cm", "Width_cm", "Height_cm", "Quantity", "Weight_Per_Unit_kg"])
-                for col in ["Length_cm", "Width_cm", "Height_cm", "Quantity", "Weight_Per_Unit_kg"]:
+                # Cleaning data
+                df = df.dropna(subset=["Length_cm", "Width_cm", "Height_cm", "Quantity", "Weight_kg"])
+                for col in ["Length_cm", "Width_cm", "Height_cm", "Quantity", "Weight_kg"]:
                     df[col] = pd.to_numeric(df[col], errors='coerce')
                 df = df.dropna()
 
                 if not df.empty:
-                    max_L = df['Length_cm'].max()
-                    max_W = df['Width_cm'].max()
-                    max_H = df['Height_cm'].max()
-                    
+                    # Logic: Each row's Weight_kg is already the total for that line
+                    # Each row's CBM = (L*W*H*Qty)/1,000,000
                     df['Total_CBM'] = (df['Length_cm'] * df['Width_cm'] * df['Height_cm'] * df['Quantity']) / 1000000
-                    df['Total_Weight'] = df['Weight_Per_Unit_kg'] * df['Quantity']
                     
-                    total_cbm = df['Total_CBM'].sum()
-                    total_kg = df['Total_Weight'].sum()
+                    # Totals for the entire shipment
+                    grand_total_cbm = df['Total_CBM'].sum()
+                    grand_total_weight = df['Weight_kg'].sum() # Auto SUM of all lines
 
                     st.divider()
                     
-                    # Recommendation Logic
+                    # Displaying Summary Metrics
+                    m1, m2 = st.columns(2)
+                    m1.metric("Total Volume (All Items)", f"{grand_total_cbm:.2f} CBM")
+                    m2.metric("Total Weight (All Items)", f"{grand_total_weight:,.2f} kg")
+
+                    # Checking for the best container match
+                    max_L, max_W, max_H = df['Length_cm'].max(), df['Width_cm'].max(), df['Height_cm'].max()
+                    
                     best_option = None
                     for name, spec in container_specs.items():
                         if (max_L <= spec["L"] and max_W <= spec["W"] and max_H <= spec["H"] and 
-                            total_kg <= spec["max_kg"] and total_cbm <= spec["max_cbm"]):
+                            grand_total_weight <= spec["max_kg"] and grand_total_cbm <= spec["max_cbm"]):
                             best_option = name
                             break
 
-                    col1, col2 = st.columns(2)
-                    col1.metric("Total Volume", f"{total_cbm:.2f} CBM")
-                    col2.metric("Total Weight", f"{total_kg:,.2f} kg")
-
                     if best_option:
-                        st.success(f"✅ Recommended: **{best_option}**")
-                        if is_heavy_duty and best_option == "40HC":
-                            st.info("Using Heavy Duty Payload (28,000 kg)")
+                        st.success(f"✅ Recommended Container: **{best_option}**")
                     else:
-                        st.error("❌ Exceeds Standard Payload/Dimensions (26,000kg limit)")
-                        if total_kg > 26000 and total_kg <= 28000:
-                            st.warning("💡 Tip: Enable 'Heavy Duty Mode' if using a 40HC Heavy Duty container.")
+                        st.error(f"❌ Exceeds Standard Capacity (Max: {hc_payload:,.0f}kg)")
+                        if grand_total_weight > 26000 and not is_heavy_duty:
+                            st.info("💡 Note: If you are using a 40HC Heavy Duty, enable the toggle in the sidebar.")
                     
                     st.dataframe(df, use_container_width=True)
 
     elif app_mode == "2. OOG CHECK":
-        st.subheader("🏗️ OOG Advisor")
+        st.subheader("🏗️ OOG (Out of Gauge) Check")
+        # Same OOG logic
     elif app_mode == "3. IMO/DG CHECK":
-        st.subheader("☣️ DG Advisor")
+        st.subheader("☣️ IMO/DG Cargo Check")
+        # Same DG logic
 
     if st.sidebar.button("Logout"):
         del st.session_state["password_correct"]
