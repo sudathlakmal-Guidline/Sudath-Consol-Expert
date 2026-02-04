@@ -52,62 +52,33 @@ if check_password():
 
         if st.button("Analyze Shipment"):
             if not df.empty:
-                df[['Length_cm', 'Width_cm', 'Height_cm', 'Quantity', 'Weight_kg']] = df[['Length_cm', 'Width_cm', 'Height_cm', 'Quantity', 'Weight_kg']].apply(pd.to_numeric, errors='coerce')
-                df = df.dropna()
-                
-                max_L, max_W, max_H = df['Length_cm'].max(), df['Width_cm'].max(), df['Height_cm'].max()
-                total_kg = df['Weight_kg'].sum()
-                total_cbm = (df['Length_cm'] * df['Width_cm'] * df['Height_cm'] * df['Quantity']).sum() / 1000000
+                try:
+                    df[['Length_cm', 'Width_cm', 'Height_cm', 'Quantity', 'Weight_kg']] = df[['Length_cm', 'Width_cm', 'Height_cm', 'Quantity', 'Weight_kg']].apply(pd.to_numeric, errors='coerce')
+                    df = df.dropna()
+                    
+                    max_L, max_W, max_H = df['Length_cm'].max(), df['Width_cm'].max(), df['Height_cm'].max()
+                    total_kg = df['Weight_kg'].sum()
+                    total_cbm = (df['Length_cm'] * df['Width_cm'] * df['Height_cm'] * df['Quantity']).sum() / 1000000
 
-                st.divider()
-                if max_L > 1200 or max_W > 230 or max_H > 265:
-                    st.error("⚠️ OOG / NON-CONTAINERIZED CARGO DETECTED")
-                    rec = "BREAK BULK / FLAT BED" if max_L > 1200 else "FLAT RACK / OPEN TOP"
-                    st.info(f"Recommended Solution: **{rec}**")
-                                    else:
-                    best_con = next((c for c, s in container_specs.items() if max_L <= s["L"] and max_W <= s["W"] and max_H <= s["H"] and total_kg <= s["max_kg"] and total_cbm <= s["max_cbm"]), None)
-                    if best_con:
-                        st.success(f"✅ Use **{best_con}** | Space left: {container_specs[best_con]['max_cbm']-total_cbm:.2f} CBM")
+                    st.divider()
+                    if max_L > 1200 or max_W > 230 or max_H > 265:
+                        st.error("⚠️ OOG / NON-CONTAINERIZED CARGO DETECTED")
+                        rec = "BREAK BULK / FLAT BED" if max_L > 1200 else "FLAT RACK / OPEN TOP"
+                        st.info(f"Recommended Solution: **{rec}**")
                     else:
-                        st.warning("Cargo fits dimensions but exceeds weight/volume for one container.")
-                st.dataframe(df)
+                        best_con = None
+                        for con, specs in container_specs.items():
+                            if max_L <= specs["L"] and max_W <= specs["W"] and max_H <= specs["H"] and total_kg <= specs["max_kg"] and total_cbm <= specs["max_cbm"]:
+                                best_con = con
+                                break
+                        
+                        if best_con:
+                            st.success(f"✅ Use **{best_con}** | Space left: {container_specs[best_con]['max_cbm']-total_cbm:.2f} CBM")
+                        else:
+                            st.warning("Cargo fits dimensions but exceeds weight/volume for one container.")
+                    st.dataframe(df)
+                except:
+                    st.error("Please enter valid numbers.")
 
     # --- MODULE 2: DG COMPLIANCE ---
     elif app_mode == "DG Compliance & Segregation":
-        st.subheader("⚠️ IMDG Class & Colombo Customs Compliance")
-        
-        c1, c2 = st.columns(2)
-        with c1:
-            imdg_class = st.selectbox("IMDG Class:", ["2.1", "3", "4.1", "5.1", "6.1", "8", "9"])
-            un_no = st.text_input("UN Number:")
-            carrier = st.selectbox("Line:", ["Maersk", "MSC", "Hapag-Lloyd", "CMA CGM", "ONE", "Other"])
-        
-        with c2:
-            st.markdown("### 📄 Required Docs (Colombo Customs)")
-            st.write("- **CUSDEC** (Customs Declaration)")
-            st.write("- **DGD** (Dangerous Goods Declaration - 3 copies)")
-            st.write("- **MSDS** (16 Sections mandatory)")
-            st.write("- **Boat Note** & **Cargo Dispatch Note (CDN)**")
-
-        if st.button("Check DG Compliance"):
-            st.divider()
-            st.subheader(f"Advice for Class {imdg_class} via {carrier}")
-            
-            # Segregation advice
-            if imdg_class in seg_matrix:
-                st.info("🔍 **IMDG Segregation Table 7.2.1.1 Advice:**")
-                for other, rule in seg_matrix[imdg_class].items():
-                    if rule == "2": st.error(f"Must be **SEPARATED FROM** Class {other} (min 6m)")
-                    if rule == "1": st.warning(f"Must be **AWAY FROM** Class {other} (min 3m)")
-
-            # Packing/Labeling
-            st.markdown("### 🏷️ Mandatory Marking")
-            st.write(f"1. **Inner:** UN specification marks required.")
-            st.write(f"2. **Outer:** IMDG Class {imdg_class} placards on all 4 sides of the container.")
-                        
-            if carrier in ["Maersk", "MSC"]:
-                st.error(f"🛑 **{carrier} Alert:** Requires DG manifestation 48hrs prior to vessel arrival at Colombo.")
-
-    if st.sidebar.button("Logout"):
-        del st.session_state["password_correct"]
-        st.rerun()
