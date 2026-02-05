@@ -11,6 +11,7 @@ st.markdown("""
     .main-title { background: linear-gradient(90deg, #002b5e 0%, #004a99 100%); padding: 30px; border-radius: 15px; color: white; text-align: center; margin-bottom: 30px; }
     .stButton>button { background-color: #004a99; color: white; border-radius: 8px; height: 3.5em; width: 100%; font-weight: bold; }
     .stDataEditor { border: 1px solid #ddd; border-radius: 10px; }
+    .metric-box { background-color: #f0f2f6; padding: 20px; border-radius: 10px; text-align: center; border: 1px solid #dcdcdc; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -50,13 +51,44 @@ else:
         
         if st.button("GENERATE 3D LOADING PLAN"):
             clean = df.dropna()
+            
+            # --- CBM සහ UTILIZATION ගණනය කිරීම ---
+            # Container Frame (20GP Standard) - Dimensions in cm
+            L_con, W_con, H_con = 585, 230, 235
+            container_cbm = (L_con * W_con * H_con) / 1000000
+            
+            total_cargo_cbm = 0
+            for _, row in clean.iterrows():
+                item_cbm = (row['L'] * row['W'] * row['H'] * row['Qty']) / 1000000
+                total_cargo_cbm += item_cbm
+            
+            utilization = (total_cargo_cbm / container_cbm) * 100
+            
+            # --- Summary Dashboard එක පෙන්වීම ---
+            st.divider()
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric("Total Cargo Volume", f"{total_cargo_cbm:.2f} CBM")
+            with col2:
+                st.metric("Container Capacity", f"{container_cbm:.2f} CBM")
+            with col3:
+                st.metric("Space Utilization", f"{utilization:.1f}%")
+            
+            # Utilization Progress Bar
+            bar_color = "green" if utilization <= 100 else "red"
+            st.write(f"**Storage Load Factor:**")
+            st.progress(min(utilization / 100, 1.0))
+            
+            if utilization > 100:
+                st.warning(f"⚠️ Warning: Cargo exceeds container capacity by {(utilization - 100):.1f}%")
+            # -------------------------------------
+
             fig = go.Figure()
             
-            # Container Frame (20GP Standard)
-            L, W, H = 585, 230, 235
-            fig.add_trace(go.Scatter3d(x=[0,L,L,0,0,0,L,L,0,0,L,L,L,L,0,0], y=[0,0,W,W,0,0,0,W,W,0,0,0,W,W,W,W], z=[0,0,0,0,0,H,H,H,H,H,H,0,0,H,H,0], mode='lines', line=dict(color='black', width=4), showlegend=False))
+            # Container Frame Visual
+            fig.add_trace(go.Scatter3d(x=[0,L_con,L_con,0,0,0,L_con,L_con,0,0,L_con,L_con,L_con,L_con,0,0], y=[0,0,W_con,W_con,0,0,0,W_con,W_con,0,0,0,W_con,W_con,W_con,W_con], z=[0,0,0,0,0,H_con,H_con,H_con,H_con,H_con,H_con,0,0,H_con,H_con,0], mode='lines', line=dict(color='black', width=4), showlegend=False))
             
-            # 🎨 විවිධ Cargo වර්ග සඳහා වෙනස් වර්ණ (Color Palette)
+            # 🎨 Color Palette
             colors = ["#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd", "#8c564b", "#e377c2", "#7f7f7f", "#bcbd22", "#17becf"]
             
             cx, cy, cz, mh = 0, 0, 0, 0
@@ -66,9 +98,9 @@ else:
                 first = True
                 
                 for _ in range(int(r['Qty'])):
-                    if cx + l_val > L: cx = 0; cy += w_val
-                    if cy + w_val > W: cy = 0; cz += mh; mh = 0
-                    if cz + h_val <= H:
+                    if cx + l_val > L_con: cx = 0; cy += w_val
+                    if cy + w_val > W_con: cy = 0; cz += mh; mh = 0
+                    if cz + h_val <= H_con:
                         fig.add_trace(go.Mesh3d(
                             x=[cx,cx,cx+l_val,cx+l_val,cx,cx,cx+l_val,cx+l_val], 
                             y=[cy,cy+w_val,cy+w_val,cy,cy,cy+w_val,cy+w_val,cy], 
