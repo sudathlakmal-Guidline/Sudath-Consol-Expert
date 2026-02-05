@@ -30,11 +30,12 @@ if not st.session_state.auth:
         u = st.text_input("User ID")
         p = st.text_input("Password", type="password")
         if st.button("LOGIN"):
-            if u == "sudath" and p == "admin123":
+            # Lowercase comparison prevents case sensitivity errors
+            if u.lower() == "sudath" and p.lower() == "admin123":
                 st.session_state.auth = True
                 st.rerun()
             else:
-                st.error("Invalid Credentials")
+                st.error("Invalid Credentials (Check spelling/case)")
 else:
     st.markdown('<div class="header"><h1>🚢 SMART CONSOL PLANNER - POWERED BY SUDATH</h1></div>', unsafe_allow_html=True)
     with st.sidebar:
@@ -63,17 +64,18 @@ else:
                     errors.append(f"❌ {r['Cargo']} exceeds dimensions!")
 
             util = (total_vol / specs['MAX_CBM']) * 100
-            m1, m2, m3, m4 = st.columns(4)
-            with m1: st.markdown(f'<div class="metric-card">Total Cargo<br><h3>{total_vol:.2f} CBM</h3></div>', unsafe_allow_html=True)
-            with m2: st.markdown(f'<div class="metric-card">Capacity<br><h3>{specs["MAX_CBM"]} CBM</h3></div>', unsafe_allow_html=True)
-            with m3: st.markdown(f'<div class="metric-card">Utilization<br><h3>{util:.1f}%</h3></div>', unsafe_allow_html=True)
-            with m4: st.markdown(f'<div class="metric-card">Total Weight<br><h3>{total_weight:,} kg</h3></div>', unsafe_allow_html=True)
+            
+            # Metrics
+            cols = st.columns(4)
+            cols[0].markdown(f'<div class="metric-card">Total Cargo<br><h3>{total_vol:.2f} CBM</h3></div>', unsafe_allow_html=True)
+            cols[1].markdown(f'<div class="metric-card">Capacity<br><h3>{specs["MAX_CBM"]} CBM</h3></div>', unsafe_allow_html=True)
+            cols[2].markdown(f'<div class="metric-card">Utilization<br><h3>{util:.1f}%</h3></div>', unsafe_allow_html=True)
+            cols[3].markdown(f'<div class="metric-card">Total Weight<br><h3>{total_weight:,} kg</h3></div>', unsafe_allow_html=True)
             
             st.progress(min(util/100, 1.0))
             
-            # Checks
             if total_weight > 26000:
-                st.error(f"🚨 WEIGHT ALERT: Total Gross Weight ({total_weight:,} kg) exceeds 26,000 kg limit!")
+                st.error(f"🚨 WEIGHT ALERT: {total_weight:,} kg exceeds 26k limit!")
             if total_vol > specs['MAX_CBM']:
                 st.error("🚨 VOLUME OVERLOAD!")
             
@@ -92,18 +94,14 @@ else:
                     l, w, h = r['L'], r['W'], r['H']
                     for _ in range(int(r['Qty'])):
                         u_l, u_w = l, w
-                        if r['Allow_Rotate'] and (cx + l > CL) and (cx + w <= CL and l <= CW): u_l, u_w = w, l
-                        if cx + u_l > CL: cx = 0; cy += u_w
-                        if cy + u_w > CW: cy = 0; cz += mh; mh = 0
+                        if r['Allow_Rotate'] and (cx + l > CL) and (cx + w <= CL and l <= CW):
+                            u_l, u_w = w, l
+                        if cx + u_l > CL:
+                            cx = 0; cy += u_w
+                        if cy + u_w > CW:
+                            cy = 0; cz += mh; mh = 0
                         if cz + h <= CH:
                             fig.add_trace(go.Mesh3d(x=[cx,cx,cx+u_l,cx+u_l,cx,cx,cx+u_l,cx+u_l], y=[cy,cy+u_w,cy+u_w,cy,cy,cy+u_w,cy+u_w,cy], z=[cz,cz,cz,cz,cz+h,cz+h,cz+h,cz+h], color=clr, opacity=0.7, alphahull=0))
                             cx += u_l; mh = max(mh, h)
 
-                fig.update_layout(scene=dict(aspectmode='data'), margin=dict(l=0,r=0,b=0,t=0))
-                st.plotly_chart(fig, use_container_width=True)
-                st.markdown(legend_html + "</div>", unsafe_allow_html=True)
-            else:
-                for e in errors:
-                    st.error(e)
-
-st.markdown("<hr><center>© 2026 SMART CONSOL PLANNER - POWERED BY SUDATH</center>", unsafe_allow_html=True)
+                fig.update_layout(scene=dict(aspectmode='data'), margin=dict(l
