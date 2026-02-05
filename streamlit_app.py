@@ -46,6 +46,7 @@ else:
     specs = CONTAINERS[c_type]
     st.subheader(f"📊 {c_type} Entry & Smart Validation")
     
+    # Updated default dataframe to match expected input
     df = st.data_editor(pd.DataFrame([
         {"Cargo":"Shipment_1", "L":120, "W":100, "H":100, "Qty":5, "Gross_Weight_kg": 500, "Allow_Rotate": True}
     ]), num_rows="dynamic", use_container_width=True)
@@ -53,10 +54,10 @@ else:
     if st.button("GENERATE VALIDATED 3D PLAN"):
         clean_df = df.dropna().copy()
         if not clean_df.empty:
-            # Fixing Weight Calculation & Volume logic
+            # Logic: Using Gross_Weight_kg as the TOTAL weight for that line (not multiplying by Qty again)
             clean_df['Vol_Unit'] = (clean_df['L'] * clean_df['W'] * clean_df['H']) / 1000000
             total_vol = (clean_df['Vol_Unit'] * clean_df['Qty']).sum()
-            total_weight = (clean_df['Gross_Weight_kg'] * clean_df['Qty']).sum() # Corrected Total Weight
+            total_weight = clean_df['Gross_Weight_kg'].sum() # FIXED: Summing the column as is
 
             util = (total_vol / specs['MAX_CBM']) * 100
             
@@ -74,7 +75,7 @@ else:
             if total_vol > specs['MAX_CBM']:
                 st.error("🚨 VOLUME OVERLOAD!")
             
-            # Smart Sorting: Heaviest and Biggest Items First (for Bottom Loading)
+            # Smart Sorting: Heaviest and Biggest Items First
             clean_df = clean_df.sort_values(by=['Gross_Weight_kg', 'Vol_Unit'], ascending=False)
 
             fig = go.Figure()
