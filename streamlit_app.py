@@ -88,30 +88,33 @@ else:
             st.plotly_chart(fig, use_container_width=True)
 
             # --- PDF Report Generation ---
-            pdf = FPDF()
-            pdf.add_page()
-            pdf.set_font("Arial", 'B', 16)
-            pdf.cell(190, 10, 'SMART CONSOL LOADING REPORT', 0, 1, 'C')
-            pdf.ln(10)
-            pdf.set_font("Arial", size=12)
-            pdf.cell(100, 10, f"Total Volume: {total_vol:.2f} CBM")
-            pdf.cell(90, 10, f"Total Weight: {total_weight:,.0f} kg", 0, 1)
-            pdf.ln(10)
-            
-            # Simple Table Header
-            pdf.cell(60, 10, 'Cargo', 1)
-            pdf.cell(30, 10, 'Qty', 1)
-            pdf.cell(50, 10, 'Dimensions', 1)
-            pdf.cell(50, 10, 'Weight (kg)', 1, 1)
-            
-            for _, r in clean_df.iterrows():
-                pdf.cell(60, 10, str(r['Cargo']), 1)
-                pdf.cell(30, 10, str(int(r['Qty'])), 1)
-                pdf.cell(50, 10, f"{r['L']}x{r['W']}x{r['H']}", 1)
-                pdf.cell(50, 10, f"{r['Gross_Weight_kg']:,}", 1, 1)
-            
-            pdf_data = pdf.output(dest='S').encode('latin-1')
-            b64_pdf = base64.b64encode(pdf_data).decode()
-            st.markdown(f'<a href="data:application/octet-stream;base64,{b64_pdf}" download="Loading_Plan.pdf" style="display:inline-block; padding:12px 24px; background-color:#28a745; color:white; text-decoration:none; border-radius:8px; font-weight:bold;">📥 DOWNLOAD PDF REPORT</a>', unsafe_allow_html=True)
+            try:
+                pdf = FPDF()
+                pdf.add_page()
+                pdf.set_font("Arial", 'B', 16)
+                pdf.cell(190, 10, 'SMART CONSOL LOADING REPORT', 0, 1, 'C')
+                pdf.ln(10)
+                pdf.set_font("Arial", size=12)
+                pdf.cell(100, 10, f"Total Volume: {total_vol:.2f} CBM")
+                pdf.cell(90, 10, f"Total Weight: {total_weight:,.0f} kg", 0, 1)
+                pdf.ln(10)
+                
+                # Table
+                pdf.cell(60, 10, 'Cargo', 1)
+                pdf.cell(30, 10, 'Qty', 1)
+                pdf.cell(50, 10, 'Dimensions', 1)
+                pdf.cell(50, 10, 'Weight (kg)', 1, 1)
+                
+                for _, r in clean_df.iterrows():
+                    pdf.cell(60, 10, str(r['Cargo']), 1)
+                    pdf.cell(30, 10, str(int(r['Qty'])), 1)
+                    pdf.cell(50, 10, f"{r['L']}x{r['W']}x{r['H']}", 1)
+                    pdf.cell(50, 10, f"{r['Gross_Weight_kg']:,}", 1, 1)
+                
+                pdf_data = pdf.output(dest='S').encode('latin-1')
+                b64_pdf = base64.b64encode(pdf_data).decode()
+                st.markdown(f'<a href="data:application/octet-stream;base64,{b64_pdf}" download="Loading_Plan.pdf" style="display:inline-block; padding:12px 24px; background-color:#28a745; color:white; text-decoration:none; border-radius:8px; font-weight:bold; margin-top:20px;">📥 DOWNLOAD PDF REPORT</a>', unsafe_allow_html=True)
+            except Exception as e:
+                st.error(f"Error generating PDF: {e}")
 
 st.markdown("<hr><center>© 2026 SMART CONSOL PLANNER - POWERED BY SUDATH</center>", unsafe_allow_html=True)
