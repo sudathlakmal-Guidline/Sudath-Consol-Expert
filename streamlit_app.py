@@ -39,27 +39,38 @@ else:
 
     specs = CONTAINERS[c_type]
     st.subheader(f"📊 {c_type} Entry & Smart Validation")
-    df = st.data_editor(pd.DataFrame([{"Cargo":"Shipment_1", "L":120, "W":100, "H":100, "Qty":5, "Allow_Rotate": True}]), num_rows="dynamic", use_container_width=True)
+    
+    # Updated Table with Gross Weight Column
+    df = st.data_editor(pd.DataFrame([
+        {"Cargo":"Shipment_1", "L":120, "W":100, "H":100, "Qty":5, "Gross_Weight_kg": 500, "Allow_Rotate": True}
+    ]), num_rows="dynamic", use_container_width=True)
 
     if st.button("GENERATE VALIDATED 3D PLAN"):
         clean_df = df.dropna()
         if not clean_df.empty:
-            total_vol, shipment_vols, errors = 0, [], []
+            total_vol, total_weight, shipment_vols, errors = 0, 0, [], []
             for i, r in clean_df.iterrows():
                 v = (r['L'] * r['W'] * r['H'] * r['Qty']) / 1000000
                 total_vol += v
+                total_weight += (r['Gross_Weight_kg'] * r['Qty'])
                 shipment_vols.append({"name": r['Cargo'], "vol": v})
                 if not r['Allow_Rotate'] and (r['L'] > specs['L'] or r['W'] > specs['W'] or r['H'] > specs['H']):
                     errors.append(f"❌ {r['Cargo']} exceeds dimensions!")
 
             util = (total_vol / specs['MAX_CBM']) * 100
-            m1, m2, m3 = st.columns(3)
+            m1, m2, m3, m4 = st.columns(4)
             with m1: st.markdown(f'<div class="metric-card">Total Cargo<br><h3>{total_vol:.2f} CBM</h3></div>', unsafe_allow_html=True)
             with m2: st.markdown(f'<div class="metric-card">Capacity<br><h3>{specs["MAX_CBM"]} CBM</h3></div>', unsafe_allow_html=True)
             with m3: st.markdown(f'<div class="metric-card">Utilization<br><h3>{util:.1f}%</h3></div>', unsafe_allow_html=True)
+            with m4: st.markdown(f'<div class="metric-card">Total Weight<br><h3>{total_weight:,} kg</h3></div>', unsafe_allow_html=True)
+            
             st.progress(min(util/100, 1.0))
-            if total_vol > specs['MAX_CBM']:
-                st.error("🚨 OVERLOAD!")
+            
+            # Weight Limit Alert (26,000 kg)
+            if total_weight > 26000:
+                st.error(f"⚠️ WEIGHT ALERT: Total Gross Weight ({total_weight:,} kg) exceeds the limit of 26,000 kg!")
+                if total_vol > specs['MAX_CBM']:
+                st.error("🚨 VOLUME OVERLOAD!")
                 sorted_l = sorted(shipment_vols, key=lambda x: x['vol'], reverse=True)
                 st.info(f"💡 Advice: Hold '{sorted_l[0]['name']}' ({sorted_l[0]['vol']:.2f} CBM)")
             elif errors:
