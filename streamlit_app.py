@@ -3,90 +3,96 @@ import pandas as pd
 import plotly.graph_objects as go
 
 # --- 1. CONFIG ---
-st.set_page_config(page_title="SMART CONSOL PRO - SUDATH", layout="wide")
+st.set_page_config(page_title="SMART CONSOL PLANNER - SUDATH", layout="wide")
 
-CONTAINERS = {
-    "20GP": {"L": 585, "W": 230, "H": 230, "MAX_CBM": 31.0, "MAX_KG": 28000},
-    "40GP": {"L": 1200, "W": 230, "H": 230, "MAX_CBM": 58.0, "MAX_KG": 28000}
-}
+# ප්‍රධාන නම වෙනස් කිරීම
+st.markdown('<h1 style="background-color:#004a99; color:white; text-align:center; padding:15px; border-radius:10px;">🚢 SMART CONSOL PLANNER - POWERED BY SUDATH</h1>', unsafe_allow_html=True)
 
-st.markdown('<h1 style="background-color:#004a99; color:white; text-align:center; padding:10px; border-radius:10px;">🚢 SMART CONSOL PRO - SUDATH VERSION</h1>', unsafe_allow_html=True)
-
-# 1. දත්ත ඇතුළත් කිරීම (Default values with your shipment data)
-df = st.data_editor(pd.DataFrame([
-    {"Cargo":"Shipment_1", "L":120, "W":100, "H":100, "Qty":5, "Weight_kg": 500},
-    {"Cargo":"Shipment_2", "L":115, "W":115, "H":115, "Qty":10, "Weight_kg": 1500}
+# 2. දත්ත ඇතුළත් කිරීමේ වගුව
+df_input = st.data_editor(pd.DataFrame([
+    {"Cargo": "Shipment_1", "L": 120, "W": 100, "H": 100, "Qty": 5, "Weight_kg": 500},
+    {"Cargo": "Shipment_2", "L": 115, "W": 115, "H": 115, "Qty": 10, "Weight_kg": 1500}
 ]), num_rows="dynamic", use_container_width=True)
 
-if st.button("GENERATE STACKED 3D PLAN & FINAL WEIGHT", use_container_width=True):
-    clean_df = df.dropna().copy()
+if st.button("🚀 GENERATE STACKED LOADING PLAN", use_container_width=True):
+    df = df_input.dropna().copy()
     
-    if not clean_df.empty:
-        # --- ✅ පේළියෙන් පේළියට බර ගණනය කිරීම (The Logic You Wanted) ---
-        clean_df['Row_Total_Weight'] = clean_df['Weight_kg'] * clean_df['Qty']
-        final_gross_weight = clean_df['Row_Total_Weight'].sum()
+    if not df.empty:
+        # --- 🔴 1. GROSS WEIGHT එකතුව (Total Sum) ---
+        # එක් එක් පේළියේ බර වෙන වෙනම ගණනය කර (Weight * Qty) එහි එකතුව ලබා ගැනීම
+        df['Row_Total_Weight'] = df['Weight_kg'] * df['Qty']
+        final_gross_weight = df['Row_Total_Weight'].sum()
         
-        # --- ✅ බර වැඩි බඩු මුලින්ම ඇසිරීම (Heaviest first for stability) ---
-        # Weight_kg එකෙන් sort කරනවා, එවිට බර දේවල් මුලින්ම container එකට වැටෙනවා.
-        clean_df = clean_df.sort_values(by='Weight_kg', ascending=False)
+        # --- 🔴 2. HEAVY ON BOTTOM (Sorting by Weight) ---
+        # බර වැඩිම අයිතම ලැයිස්තුවේ මුලට ගන්නා නිසා ඒවා පතුලටම ඇසිරේ
+        df_sorted = df.sort_values(by='Weight_kg', ascending=False)
         
         # පරිමාව (Volume)
-        clean_df['Row_CBM'] = (clean_df['L'] * clean_df['W'] * clean_df['H'] * clean_df['Qty']) / 1000000
-        final_total_cbm = clean_df['Row_CBM'].sum()
+        df['Row_CBM'] = (df['L'] * df['W'] * df['H'] * df['Qty']) / 1000000
+        total_cbm = df['Row_CBM'].sum()
         
         # Metrics පෙන්වීම
         m1, m2, m3 = st.columns(3)
-        m1.metric("Total Cargo Volume", f"{final_total_cbm:.2f} CBM")
-        m2.metric("TOTAL GROSS WEIGHT", f"{final_gross_weight:,.0f} kg")
-        m3.metric("Utilization %", f"{(final_total_cbm/31)*100:.1f}%")
+        m1.metric("TOTAL GROSS WEIGHT", f"{final_gross_weight:,.0f} kg")
+        m2.metric("TOTAL VOLUME", f"{total_cbm:.2f} CBM")
+        m3.metric("UTILIZATION %", f"{(total_cbm/31)*100:.1f}%")
 
-        # --- 3D Visualization (True Stacking Logic) ---
+        # --- 🚢 3. SMART 3D STACKING ALGORITHM ---
         fig = go.Figure()
-        cx, cy, cz, layer_h = 0, 0, 0, 0
-        L_max, W_max, H_max = 585, 230, 230 # 20GP default
+        L_max, W_max, H_max = 585, 230, 230
         
-        colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b']
-        
-        for idx, row in clean_df.reset_index().iterrows():
+        x_p, y_p, z_p = 0, 0, 0
+        max_h_layer = 0
+        max_w_row = 0
+
+        # වර්ණ කේත
+        colors = ['#d62728', '#1f77b4', '#2ca02c', '#ff7f0e', '#9467bd']
+
+        for idx, row in df_sorted.reset_index().iterrows():
             l, w, h = row['L'], row['W'], row['H']
             clr = colors[idx % len(colors)]
             
             for _ in range(int(row['Qty'])):
-                # පළල (Width) පිරුණු විට ඊළඟ පේළියට (Row) යන්න
-                if cx + l > L_max:
-                    cx = 0
-                    cy += w
+                # පළල පිරුණොත්
+                if y_p + w > W_max:
+                    y_p = 0
+                    x_p += max_w_row
+                    max_w_row = 0
                 
-                # දිග (Length) පිරුණු විට ඊළඟ තට්ටුවට (Layer) යන්න
-                if cy + w > W_max:
-                    cy = 0
-                    cx = 0
-                    cz += layer_h
-                    layer_h = 0
+                # දිග පිරුණොත් (ඊළඟ තට්ටුව - Layer)
+                if x_p + l > L_max:
+                    x_p = 0
+                    y_p = 0
+                    z_p += max_h_layer
+                    max_h_layer = 0
                 
-                # බඩු ඇසිරීම (Add Box to 3D)
-                if cz + h <= H_max:
+                # 3D Box ඇඳීම
+                if z_p + h <= H_max:
                     fig.add_trace(go.Mesh3d(
-                        x=[cx, cx, cx+l, cx+l, cx, cx, cx+l, cx+l],
-                        y=[cy, cy+w, cy+w, cy, cy, cy+w, cy+w, cy],
-                        z=[cz, cz, cz, cz, cz+h, cz+h, cz+h, cz+h],
+                        x=[x_p, x_p, x_p+l, x_p+l, x_p, x_p, x_p+l, x_p+l],
+                        y=[y_p, y_p+w, y_p+w, y_p, y_p, y_p+w, y_p+w, y_p],
+                        z=[z_p, z_p, z_p, z_p, z_p+h, z_p+h, z_p+h, z_p+h],
                         color=clr, opacity=0.8, alphahull=0,
-                        name=row['Cargo']
+                        name=f"{row['Cargo']} ({row['Weight_kg']}kg)"
                     ))
-                    cx += l
-                    layer_h = max(layer_h, h)
+                    
+                    y_p += w
+                    max_w_row = max(max_w_row, l)
+                    max_h_layer = max(max_h_layer, h)
+
+        # Container Frame
+        fig.add_trace(go.Scatter3d(
+            x=[0,L_max,L_max,0,0,0,L_max,L_max,0,0,L_max,L_max,L_max,L_max,0,0],
+            y=[0,0,W_max,W_max,0,0,0,W_max,W_max,0,0,0,W_max,W_max,W_max,W_max],
+            z=[0,0,0,0,0,H_max,H_max,H_max,H_max,H_max,H_max,0,0,H_max,H_max,0],
+            mode='lines', line=dict(color='black', width=3), showlegend=False
+        ))
 
         fig.update_layout(
-            scene=dict(
-                xaxis=dict(title='Length (cm)', range=[0, 585]),
-                yaxis=dict(title='Width (cm)', range=[0, 230]),
-                zaxis=dict(title='Height (cm)', range=[0, 230]),
-                aspectmode='manual',
-                aspectratio=dict(x=2.5, y=1, z=1)
-            ),
-            margin=dict(l=0,r=0,b=0,t=0),
-            title="SUDATH'S 3D LOADING PLAN (HEAVY CARGO ON BOTTOM)"
+            scene=dict(aspectmode='data', xaxis_title='L', yaxis_title='W', zaxis_title='H'),
+            margin=dict(l=0,r=0,b=0,t=0)
         )
         st.plotly_chart(fig, use_container_width=True)
-    else:
-        st.warning("Please enter cargo details first!")
+
+# පතුලේ ඇති නම
+st.markdown("<hr><center>© 2026 SMART CONSOL PLANNER - POWERED BY SUDATH</center>", unsafe_allow_html=True)
