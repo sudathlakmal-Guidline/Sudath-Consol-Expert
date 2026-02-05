@@ -40,7 +40,7 @@ else:
     specs = CONTAINERS[c_type]
     st.subheader(f"📊 {c_type} Entry & Smart Validation")
     
-    # Updated Table with Gross Weight Column
+    # Shipment entry with Weight
     df = st.data_editor(pd.DataFrame([
         {"Cargo":"Shipment_1", "L":120, "W":100, "H":100, "Qty":5, "Gross_Weight_kg": 500, "Allow_Rotate": True}
     ]), num_rows="dynamic", use_container_width=True)
@@ -66,9 +66,9 @@ else:
             
             st.progress(min(util/100, 1.0))
             
-            # Weight Limit Alert (26,000 kg)
+            # 26,000kg Weight Alert
             if total_weight > 26000:
-                st.error(f"⚠️ WEIGHT ALERT: Total Gross Weight ({total_weight:,} kg) exceeds the limit of 26,000 kg!")
+                st.error(f"🚨 WEIGHT ALERT: Total Gross Weight ({total_weight:,} kg) exceeds the 26,000 kg limit!")
                 if total_vol > specs['MAX_CBM']:
                 st.error("🚨 VOLUME OVERLOAD!")
                 sorted_l = sorted(shipment_vols, key=lambda x: x['vol'], reverse=True)
