@@ -39,11 +39,7 @@ else:
 
     specs = CONTAINERS[c_type]
     st.subheader(f"📊 {c_type} Entry & Smart Validation")
-    
-    # Shipment entry with Weight
-    df = st.data_editor(pd.DataFrame([
-        {"Cargo":"Shipment_1", "L":120, "W":100, "H":100, "Qty":5, "Gross_Weight_kg": 500, "Allow_Rotate": True}
-    ]), num_rows="dynamic", use_container_width=True)
+    df = st.data_editor(pd.DataFrame([{"Cargo":"Shipment_1", "L":120, "W":100, "H":100, "Qty":5, "Gross_Weight_kg": 500, "Allow_Rotate": True}]), num_rows="dynamic", use_container_width=True)
 
     if st.button("GENERATE VALIDATED 3D PLAN"):
         clean_df = df.dropna()
@@ -63,19 +59,17 @@ else:
             with m2: st.markdown(f'<div class="metric-card">Capacity<br><h3>{specs["MAX_CBM"]} CBM</h3></div>', unsafe_allow_html=True)
             with m3: st.markdown(f'<div class="metric-card">Utilization<br><h3>{util:.1f}%</h3></div>', unsafe_allow_html=True)
             with m4: st.markdown(f'<div class="metric-card">Total Weight<br><h3>{total_weight:,} kg</h3></div>', unsafe_allow_html=True)
-            
             st.progress(min(util/100, 1.0))
-            
-            # 26,000kg Weight Alert
+
+            # Independent Checks
             if total_weight > 26000:
-                st.error(f"🚨 WEIGHT ALERT: Total Gross Weight ({total_weight:,} kg) exceeds the 26,000 kg limit!")
-                if total_vol > specs['MAX_CBM']:
+                st.error(f"🚨 WEIGHT ALERT: Total Gross Weight ({total_weight:,} kg) exceeds 26,000 kg limit!")
+            
+            if total_vol > specs['MAX_CBM']:
                 st.error("🚨 VOLUME OVERLOAD!")
                 sorted_l = sorted(shipment_vols, key=lambda x: x['vol'], reverse=True)
                 st.info(f"💡 Advice: Hold '{sorted_l[0]['name']}' ({sorted_l[0]['vol']:.2f} CBM)")
-            elif errors:
-                for e in errors: st.error(e)
-            else:
+                if not errors:
                 fig = go.Figure()
                 CL, CW, CH = specs['L'], specs['W'], specs['H']
                 fig.add_trace(go.Scatter3d(x=[0,CL,CL,0,0,0,CL,CL,0,0,CL,CL,CL,CL,0,0], y=[0,0,CW,CW,0,0,0,CW,CW,0,0,0,CW,CW,CW,CW], z=[0,0,0,0,0,CH,CH,CH,CH,CH,CH,0,0,CH,CH,0], mode='lines', line=dict(color='black', width=3), showlegend=False))
@@ -100,5 +94,7 @@ else:
                 fig.update_layout(scene=dict(aspectmode='data'), margin=dict(l=0,r=0,b=0,t=0))
                 st.plotly_chart(fig, use_container_width=True)
                 st.markdown(legend_html + "</div>", unsafe_allow_html=True)
+            else:
+                for e in errors: st.error(e)
 
 st.markdown("<hr><center>© 2026 SMART CONSOL PLANNER - POWERED BY SUDATH</center>", unsafe_allow_html=True)
