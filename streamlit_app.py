@@ -13,7 +13,7 @@ CONTAINERS = {
     "40HC": {"L": 1200, "W": 230, "H": 265, "MAX_CBM": 70.0, "MAX_KG": 28000}
 }
 
-# --- 2. LOGIN ---
+# --- 2. LOGIN SYSTEM ---
 if 'auth' not in st.session_state:
     st.session_state.auth = False
 
@@ -29,7 +29,7 @@ if not st.session_state.auth:
             else: st.error("Invalid Credentials")
     st.stop()
 
-# --- 3. MAIN APP ---
+# --- 3. MAIN APP UI ---
 st.markdown('<h1 style="background-color:#004a99; color:white; text-align:center; padding:10px; border-radius:10px;">🚢 SMART CONSOL PRO - POWERED BY SUDATH</h1>', unsafe_allow_html=True)
 
 with st.sidebar:
@@ -40,34 +40,36 @@ with st.sidebar:
         st.session_state.auth = False
         st.rerun()
 
-st.subheader(f"📊 {c_type} Entry & Smart Validation")
-# Added 'Allow Rotate' column
+st.subheader(f"📊 {c_type} Cargo Entry & Smart Validation")
+
+# Data Entry Table
 df = st.data_editor(pd.DataFrame([
     {"Cargo":"Shipment_1", "L":120, "W":100, "H":100, "Qty":5, "Weight_kg": 500, "Allow_Rotate": True},
     {"Cargo":"Shipment_2", "L":115, "W":115, "H":115, "Qty":10, "Weight_kg": 1500, "Allow_Rotate": False}
 ]), num_rows="dynamic", use_container_width=True)
 
-if st.button("GENERATE VALIDATED 3D PLAN", use_container_width=True):
+if st.button("GENERATE VALIDATED 3D PLAN & REPORT", use_container_width=True):
     clean_df = df.dropna().copy()
     if not clean_df.empty:
-        # Smart Sorting: Heavy cargo at the bottom
+        # --- FIX 1: Heavy cargo at the bottom ---
         clean_df = clean_df.sort_values(by='Weight_kg', ascending=False)
         
-        # Correct Calculations
+        # --- FIX 2: Correct Total Gross Weight calculation ---
         total_vol = (clean_df['L'] * clean_df['W'] * clean_df['H'] * clean_df['Qty']).sum() / 1000000
         total_weight = (clean_df['Weight_kg'] * clean_df['Qty']).sum()
         util_pct = (total_vol / specs['MAX_CBM']) * 100
         
-        # Metrics & Progress Bar
+        # Display Metrics
         m1, m2, m3, m4 = st.columns(4)
         m1.metric("Total Cargo", f"{total_vol:.2f} CBM")
         m2.metric("Capacity", f"{specs['MAX_CBM']} CBM")
         m3.metric("Utilization", f"{util_pct:.1f}%")
-        m4.metric("Total Weight", f"{total_weight:,.0f} kg")
+        m4.metric("Total Gross Weight", f"{total_weight:,.0f} kg")
         
+        # Progress Bar for Utilization
         st.progress(min(util_pct/100, 1.0))
         if total_weight > specs['MAX_KG']:
-            st.warning(f"⚠️ WEIGHT ALERT: {total_weight:,.0f} kg exceeds limit!")
+            st.warning(f"⚠️ WEIGHT ALERT: Total load ({total_weight:,.0f} kg) exceeds container capacity!")
 
         # --- 3D Visualization ---
         fig = go.Figure()
@@ -79,15 +81,16 @@ if st.button("GENERATE VALIDATED 3D PLAN", use_container_width=True):
         cx, cy, cz, layer_h = 0, 0, 0, 0
         colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b']
         
-        # Color Key Legend (UI)
-        st.write("**Color Key:**")
-        cols = st.columns(len(clean_df))
+        # --- FIX 3: Color Key Legend ---
+        st.write("### 📦 Color Key Legend")
+        legend_cols = st.columns(len(clean_df))
         
         for idx, row in clean_df.reset_index().iterrows():
             l, w, h = row['L'], row['W'], row['H']
             clr = colors[idx % len(colors)]
-            cols[idx].markdown(f"<div style='background-color:{clr}; padding:5px; border-radius:5px; color:white; text-align:center;'>{row['Cargo']}</div>", unsafe_allow_html=True)
+            legend_cols[idx].markdown(f"<div style='background-color:{clr}; padding:8px; border-radius:5px; color:white; text-align:center; font-weight:bold;'>{row['Cargo']}</div>", unsafe_allow_html=True)
             
+            # Cargo Placement Logic
             for _ in range(int(row['Qty'])):
                 if cx + l > L_max: cx = 0; cy += w
                 if cy + w > W_max: cy = 0; cz += layer_h; layer_h = 0
@@ -99,18 +102,19 @@ if st.button("GENERATE VALIDATED 3D PLAN", use_container_width=True):
         fig.update_layout(scene=dict(aspectmode='data'), margin=dict(l=0,r=0,b=0,t=0))
         st.plotly_chart(fig, use_container_width=True)
 
-        # --- PDF REPORT ---
+        # --- PDF REPORT GENERATION ---
         pdf = FPDF()
         pdf.add_page()
         pdf.set_font("Arial", 'B', 16)
         pdf.cell(190, 10, 'SMART CONSOL LOADING REPORT', 0, 1, 'C')
         pdf.ln(10)
         pdf.set_font("Arial", size=11)
-        pdf.cell(95, 10, f"Container: {c_type} ({specs['MAX_CBM']} CBM)")
-        pdf.cell(95, 10, f"Total Weight: {total_weight:,.0f} kg", 0, 1)
+        pdf.cell(95, 10, f"Container: {c_type}")
+        pdf.cell(95, 10, f"Total Gross Weight: {total_weight:,.0f} kg", 0, 1)
         pdf.cell(95, 10, f"Utilization: {util_pct:.1f}%")
         pdf.ln(15)
         
+        # Report Table Header
         pdf.set_fill_color(200, 220, 255)
         pdf.cell(40, 10, 'Cargo', 1, 0, 'C', True)
         pdf.cell(20, 10, 'Qty', 1, 0, 'C', True)
@@ -118,6 +122,7 @@ if st.button("GENERATE VALIDATED 3D PLAN", use_container_width=True):
         pdf.cell(40, 10, 'Unit Wt (kg)', 1, 0, 'C', True)
         pdf.cell(40, 10, 'Rotate', 1, 1, 'C', True)
         
+        # Report Table Data
         for _, r in clean_df.iterrows():
             pdf.cell(40, 10, str(r['Cargo']), 1)
             pdf.cell(20, 10, str(int(r['Qty'])), 1, 0, 'C')
