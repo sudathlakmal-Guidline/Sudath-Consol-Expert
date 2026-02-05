@@ -58,7 +58,6 @@ else:
             clean_df['Vol_Unit'] = (clean_df['L'] * clean_df['W'] * clean_df['H']) / 1000000
             total_vol = (clean_df['Vol_Unit'] * clean_df['Qty']).sum()
             total_weight = clean_df['Gross_Weight_kg'].sum()
-
             util = (total_vol / specs['MAX_CBM']) * 100
             
             m1, m2, m3, m4 = st.columns(4)
@@ -91,7 +90,7 @@ else:
             fig.update_layout(scene=dict(aspectmode='data'), margin=dict(l=0,r=0,b=0,t=0))
             st.plotly_chart(fig, use_container_width=True)
 
-            # --- PDF GENERATION ---
+            # PDF Report Creation
             pdf = FPDF()
             pdf.add_page()
             pdf.set_font("Arial", 'B', 16)
@@ -99,27 +98,25 @@ else:
             pdf.ln(10)
             pdf.set_font("Arial", size=12)
             pdf.cell(100, 10, f"Container Type: {c_type}")
-            pdf.cell(90, 10, f"Date: 2026-02-05", 0, 1)
-            pdf.cell(100, 10, f"Total Volume: {total_vol:.2f} CBM")
+            pdf.cell(90, 10, f"Total Volume: {total_vol:.2f} CBM", 0, 1)
+            pdf.cell(100, 10, f"Total Weight: {total_weight:,.0f} kg")
             pdf.cell(90, 10, f"Utilization: {util:.1f}%", 0, 1)
-            pdf.cell(100, 10, f"Total Weight: {total_weight:,.0f} kg", 0, 1)
-            pdf.ln(5)
+            pdf.ln(10)
             
-            # Table Header
             pdf.set_fill_color(200, 220, 255)
-            pdf.cell(60, 10, 'Cargo', 1, 0, 'C', True)
+            pdf.cell(60, 10, 'Cargo Name', 1, 0, 'C', True)
             pdf.cell(30, 10, 'Qty', 1, 0, 'C', True)
-            pdf.cell(40, 10, 'Dimensions', 1, 0, 'C', True)
-            pdf.cell(60, 10, 'Total Weight (kg)', 1, 1, 'C', True)
+            pdf.cell(50, 10, 'L x W x H (cm)', 1, 0, 'C', True)
+            pdf.cell(50, 10, 'Line Weight (kg)', 1, 1, 'C', True)
             
             for _, r in clean_df.iterrows():
                 pdf.cell(60, 10, str(r['Cargo']), 1)
                 pdf.cell(30, 10, str(int(r['Qty'])), 1, 0, 'C')
-                pdf.cell(40, 10, f"{r['L']}x{r['W']}x{r['H']}", 1, 0, 'C')
-                pdf.cell(60, 10, f"{r['Gross_Weight_kg']:,}", 1, 1, 'C')
+                pdf.cell(50, 10, f"{r['L']}x{r['W']}x{r['H']}", 1, 0, 'C')
+                pdf.cell(50, 10, f"{r['Gross_Weight_kg']:,}", 1, 1, 'C')
             
-            pdf_output = pdf.output(dest="S").encode("latin-1")
-            b64_pdf = base64.b64encode(pdf_output).decode()
-            st.markdown(f'<a href="data:application/octet-stream;base64,{b64_pdf}" download="Loading_Plan.pdf" style="display: inline-block; padding: 10px 20px; background-color: #28a745; color: white; text-decoration: none; border-radius: 5px; font-weight: bold;">📥 DOWNLOAD PDF REPORT</a>', unsafe_allow_html=True)
+            pdf_data = pdf.output(dest='S').encode('latin-1')
+            b64_pdf = base64.b64encode(pdf_data).decode()
+            st.markdown(f'<a href="data:application/octet-stream;base64,{b64_pdf}" download="Loading_Plan.pdf" style="display:inline-block; padding:12px 24px; background-color:#28a745; color:white; text-decoration:none; border-radius:8px; font-weight:bold; margin-top:20px;">📥 DOWNLOAD PDF REPORT</a>', unsafe_allow_html=True)
 
 st.markdown("<hr><center>© 2026 SMART CONSOL PLANNER - POWERED BY SUDATH</center>", unsafe_allow_html=True)
