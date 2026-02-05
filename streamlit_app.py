@@ -13,7 +13,7 @@ CONTAINERS = {
     "40HC": {"L": 1200, "W": 230, "H": 265, "MAX_CBM": 70.0, "MAX_KG": 28000}
 }
 
-# --- 2. LOGIN SYSTEM ---
+# --- 2. LOGIN ---
 if 'auth' not in st.session_state:
     st.session_state.auth = False
 
@@ -42,7 +42,7 @@ with st.sidebar:
 
 st.subheader(f"📊 {c_type} Cargo Entry & Validation")
 
-# Data Editor
+# දත්ත ඇතුළත් කරන වගුව
 df = st.data_editor(pd.DataFrame([
     {"Cargo":"Shipment_1", "L":120, "W":100, "H":100, "Qty":5, "Weight_kg": 500, "Allow_Rotate": True},
     {"Cargo":"Shipment_2", "L":115, "W":115, "H":115, "Qty":10, "Weight_kg": 1500, "Allow_Rotate": False}
@@ -51,24 +51,25 @@ df = st.data_editor(pd.DataFrame([
 if st.button("GENERATE VALIDATED 3D PLAN & REPORT", use_container_width=True):
     clean_df = df.dropna().copy()
     if not clean_df.empty:
-        # --- බර වැඩි භාණ්ඩ යටට එන ලෙස පෙළගැස්වීම (Sorting) ---
+        # --- බර අනුව පෙළගැස්වීම (Heavy cargo on bottom logic) ---
         clean_df = clean_df.sort_values(by='Weight_kg', ascending=False)
         
-        # --- මුළු බර සහ පරිමාව ගණනය කිරීම (Fixing Total Weight) ---
+        # --- වැදගත්: නිවැරදි බර ගණනය කිරීම (GROSS WEIGHT CALCULATION) ---
+        # මෙහිදී එක් එක් භාණ්ඩයේ බර ප්‍රමාණයෙන් (Qty) ගුණ කර මුළු එකතුව ලබා ගනී.
         total_vol = (clean_df['L'] * clean_df['W'] * clean_df['H'] * clean_df['Qty']).sum() / 1000000
-        total_weight = (clean_df['Weight_kg'] * clean_df['Qty']).sum()
+        total_weight = (clean_df['Weight_kg'] * clean_df['Qty']).sum() # <--- මෙන්න මේ පේළිය තමයි නිවැරදි එක
         util_pct = (total_vol / specs['MAX_CBM']) * 100
         
-        # Metrics Display
+        # සංඛ්‍යාත්මක දත්ත පෙන්වීම
         m1, m2, m3, m4 = st.columns(4)
-        m1.metric("Total Cargo", f"{total_vol:.2f} CBM")
-        m2.metric("Capacity", f"{specs['MAX_CBM']} CBM")
+        m1.metric("Total Volume", f"{total_vol:.2f} CBM")
+        m2.metric("Container Capacity", f"{specs['MAX_CBM']} CBM")
         m3.metric("Utilization", f"{util_pct:.1f}%")
         m4.metric("Total Gross Weight", f"{total_weight:,.0f} kg")
         
         st.progress(min(util_pct/100, 1.0))
         if total_weight > specs['MAX_KG']:
-            st.warning(f"⚠️ WEIGHT ALERT: Total load ({total_weight:,.0f} kg) exceeds container capacity!")
+            st.error(f"⚠️ WEIGHT ALERT: Total load ({total_weight:,.0f} kg) exceeds container limit!")
 
         # --- 3D Visualization ---
         fig = go.Figure()
@@ -80,7 +81,6 @@ if st.button("GENERATE VALIDATED 3D PLAN & REPORT", use_container_width=True):
         cx, cy, cz, layer_h = 0, 0, 0, 0
         colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b']
         
-        # Color Key Legend
         st.write("### 📦 Color Key Legend")
         l_cols = st.columns(len(clean_df))
         
@@ -111,12 +111,11 @@ if st.button("GENERATE VALIDATED 3D PLAN & REPORT", use_container_width=True):
         pdf.cell(95, 10, f"Total Gross Weight: {total_weight:,.0f} kg", 0, 1)
         pdf.ln(15)
         
-        # Table Header
         pdf.set_fill_color(200, 220, 255)
         pdf.cell(40, 10, 'Cargo', 1, 0, 'C', True)
         pdf.cell(20, 10, 'Qty', 1, 0, 'C', True)
         pdf.cell(50, 10, 'Dim (L x W x H)', 1, 0, 'C', True)
-        pdf.cell(40, 10, 'Unit Wt (kg)', 1, 0, 'C', True)
+        pdf.cell(40, 10, 'Unit Wt', 1, 0, 'C', True)
         pdf.cell(40, 10, 'Total Wt', 1, 1, 'C', True)
         
         for _, r in clean_df.iterrows():
