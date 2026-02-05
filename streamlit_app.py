@@ -107,3 +107,24 @@ else:
             st.markdown(legend_html + "</div>", unsafe_allow_html=True)
 
 st.markdown("<hr><center>© 2026 SMART CONSOL PLANNER - POWERED BY SUDATH</center>", unsafe_allow_html=True)
+from fpdf import FPDF
+import base64
+
+def create_download_link(val, filename):
+    b64 = base64.b64encode(val)
+    return f'<a href="data:application/octet-stream;base64,{b64.decode()}" download="{filename}.pdf">📥 Download PDF Report</a>'
+
+# PDF එකක් සෑදීමට උදාහරණයක්
+if st.button("Generate PDF Report"):
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Arial", 'B', 16)
+    pdf.cell(40, 10, 'SMART CONSOL PLANNER - REPORT')
+    pdf.ln(10)
+    pdf.set_font("Arial", size=12)
+    pdf.cell(40, 10, f"Total Volume: {total_vol:.2f} CBM")
+    pdf.ln(8)
+    pdf.cell(40, 10, f"Total Weight: {total_weight:,} kg")
+    
+    html = create_download_link(pdf.output(dest="S").encode("latin-1"), "Loading_Plan")
+    st.markdown(html, unsafe_allow_html=True)
