@@ -6,9 +6,9 @@ import plotly.graph_objects as go
 st.set_page_config(page_title="SMART CONSOL PLANNER - POWERED BY SUDATH", layout="wide")
 
 CONTAINERS = {
-    "20GP": {"L": 585, "W": 230, "H": 230, "MAX_CBM": 33.0},
-    "40GP": {"L": 1200, "W": 230, "H": 230, "MAX_CBM": 67.0},
-    "40HC": {"L": 1200, "W": 230, "H": 265, "MAX_CBM": 76.0}
+    "20GP": {"L": 585, "W": 230, "H": 230, "MAX_CBM": 31.0},
+    "40GP": {"L": 1200, "W": 230, "H": 230, "MAX_CBM": 58.0},
+    "40HC": {"L": 1200, "W": 230, "H": 265, "MAX_CBM": 70.0}
 }
 
 st.markdown("""
