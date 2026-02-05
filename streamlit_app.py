@@ -42,30 +42,30 @@ with st.sidebar:
 
 st.subheader(f"📊 {c_type} Cargo Entry & Smart Validation")
 
-# දත්ත ඇතුළත් කිරීම
+# දත්ත ඇතුළත් කිරීමේ වගුව
 df = st.data_editor(pd.DataFrame([
-    {"Cargo":"Shipment_1", "L":120, "W":100, "H":100, "Qty":5, "Weight_kg": 500, "Allow_Rotate": True},
-    {"Cargo":"Shipment_2", "L":115, "W":115, "H":115, "Qty":10, "Weight_kg": 1500, "Allow_Rotate": False}
+    {"Cargo":"Shipment_1", "L":120, "W":100, "H":100, "Qty":5, "Weight_kg": 500},
+    {"Cargo":"Shipment_2", "L":115, "W":115, "H":115, "Qty":10, "Weight_kg": 1500}
 ]), num_rows="dynamic", use_container_width=True)
 
 if st.button("GENERATE VALIDATED 3D PLAN", use_container_width=True):
     clean_df = df.dropna().copy()
     if not clean_df.empty:
-        # --- නිවැරදි කිරීම 1: බර වැඩි භාණ්ඩ මුලට ගැනීම (Heavy cargo at the bottom) ---
+        # --- නිවැරදි කිරීම 1: බර වැඩි භාණ්ඩ මුලින්ම ඇසිරීමට පෙළගැස්වීම (Sorting) ---
         clean_df = clean_df.sort_values(by='Weight_kg', ascending=False)
         
-        # --- නිවැරදි කිරීම 2: මුළු Gross Weight එකතුව නිවැරදිව ගණනය කිරීම ---
+        # --- නිවැරදි කිරීම 2: මුළු බර සහ පරිමාව ගණනය කිරීම ---
         clean_df['Line_CBM'] = (clean_df['L'] * clean_df['W'] * clean_df['H'] * clean_df['Qty']) / 1000000
         clean_df['Line_Weight'] = clean_df['Weight_kg'] * clean_df['Qty']
         
         total_vol = clean_df['Line_CBM'].sum()
-        total_weight = clean_df['Line_Weight'].sum()
+        total_weight = clean_df['Line_Weight'].sum() # මුළු බර එකතුව මෙතැනින් නිවැරදි වේ
         util_pct = (total_vol / specs['MAX_CBM']) * 100
         
-        # Metrics පෙන්වීම
+        # සංඛ්‍යා පෙන්වීම
         m1, m2, m3, m4 = st.columns(4)
-        m1.metric("Total Cargo Volume", f"{total_vol:.2f} CBM")
-        m2.metric("Container Capacity", f"{specs['MAX_CBM']} CBM")
+        m1.metric("Total Volume", f"{total_vol:.2f} CBM")
+        m2.metric("Capacity", f"{specs['MAX_CBM']} CBM")
         m3.metric("Utilization", f"{util_pct:.1f}%")
         m4.metric("Total Gross Weight", f"{total_weight:,.0f} kg")
         
@@ -86,7 +86,7 @@ if st.button("GENERATE VALIDATED 3D PLAN", use_container_width=True):
         st.write("### 📦 Color Key Legend")
         l_cols = st.columns(len(clean_df))
         
-        # භාණ්ඩ ඇසිරීමේ logic එක (බර දේවල් මුලින්ම)
+        # බර භාණ්ඩ යටට එන ලෙස ඇසිරීම
         for idx, row in clean_df.reset_index().iterrows():
             l, w, h = row['L'], row['W'], row['H']
             clr = colors[idx % len(colors)]
@@ -103,33 +103,21 @@ if st.button("GENERATE VALIDATED 3D PLAN", use_container_width=True):
         fig.update_layout(scene=dict(aspectmode='data'), margin=dict(l=0,r=0,b=0,t=0))
         st.plotly_chart(fig, use_container_width=True)
 
-        # --- PDF REPORT ---
+        # PDF Report
         pdf = FPDF()
         pdf.add_page()
         pdf.set_font("Arial", 'B', 16)
         pdf.cell(190, 10, 'SMART CONSOL LOADING REPORT', 0, 1, 'C')
         pdf.ln(10)
         pdf.set_font("Arial", size=11)
-        pdf.cell(95, 10, f"Container: {c_type}")
-        pdf.cell(95, 10, f"Total Gross Weight: {total_weight:,.0f} kg", 0, 1)
+        pdf.cell(95, 10, f"Total Gross Weight: {total_weight:,.0f} kg")
         pdf.ln(15)
         
-        pdf.set_fill_color(200, 220, 255)
-        pdf.cell(40, 10, 'Cargo', 1, 0, 'C', True)
-        pdf.cell(20, 10, 'Qty', 1, 0, 'C', True)
-        pdf.cell(50, 10, 'Dim (L x W x H)', 1, 0, 'C', True)
-        pdf.cell(40, 10, 'Unit Wt', 1, 0, 'C', True)
-        pdf.cell(40, 10, 'Line Total Wt', 1, 1, 'C', True)
-        
         for _, r in clean_df.iterrows():
-            pdf.cell(40, 10, str(r['Cargo']), 1)
-            pdf.cell(20, 10, str(int(r['Qty'])), 1, 0, 'C')
-            pdf.cell(50, 10, f"{r['L']}x{r['W']}x{r['H']}", 1, 0, 'C')
-            pdf.cell(40, 10, f"{r['Weight_kg']:,}", 1, 0, 'C')
-            pdf.cell(40, 10, f"{r['Weight_kg'] * r['Qty']:,}", 1, 1, 'C')
+            pdf.cell(190, 10, f"{r['Cargo']} - Qty: {int(r['Qty'])} - Line Weight: {r['Weight_kg'] * r['Qty']:,} kg", 1, 1)
 
         pdf_bytes = pdf.output(dest='S').encode('latin-1')
         b64 = base64.b64encode(pdf_bytes).decode()
-        st.markdown(f'<a href="data:application/octet-stream;base64,{b64}" download="Consol_Plan.pdf" style="display:inline-block; padding:15px; background-color:#28a745; color:white; border-radius:10px; text-decoration:none; font-weight:bold;">📥 DOWNLOAD PDF REPORT</a>', unsafe_allow_html=True)
+        st.markdown(f'<a href="data:application/octet-stream;base64,{b64}" download="Consol_Report.pdf" style="display:inline-block; padding:15px; background-color:#28a745; color:white; border-radius:10px; text-decoration:none; font-weight:bold;">📥 DOWNLOAD REPORT</a>', unsafe_allow_html=True)
 
 st.markdown("<hr><center>© 2026 SMART CONSOL PLANNER - POWERED BY SUDATH</center>", unsafe_allow_html=True)
