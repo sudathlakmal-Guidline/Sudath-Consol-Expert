@@ -21,7 +21,9 @@ st.markdown("""
     """, unsafe_allow_html=True)
 
 # 2. LOGIN SYSTEM
-if 'auth' not in st.session_state: st.session_state.auth = False
+if 'auth' not in st.session_state:
+    st.session_state.auth = False
+
 if not st.session_state.auth:
     st.markdown("<h2 style='text-align: center;'>🚢 SMART CONSOL SYSTEM</h2>", unsafe_allow_html=True)
     with st.columns([1,1.5,1])[1]:
@@ -29,17 +31,24 @@ if not st.session_state.auth:
         p = st.text_input("Password", type="password")
         if st.button("LOGIN"):
             if u == "sudath" and p == "admin123":
-                st.session_state.auth = True; st.rerun()
-            else: st.error("Invalid Credentials")
+                st.session_state.auth = True
+                st.rerun()
+            else:
+                st.error("Invalid Credentials")
 else:
     st.markdown('<div class="header"><h1>🚢 SMART CONSOL PLANNER - POWERED BY SUDATH</h1></div>', unsafe_allow_html=True)
     with st.sidebar:
         c_type = st.selectbox("Select Container Type:", list(CONTAINERS.keys()))
-        if st.button("LOGOUT"): st.session_state.auth = False; st.rerun()
+        if st.button("LOGOUT"):
+            st.session_state.auth = False
+            st.rerun()
 
     specs = CONTAINERS[c_type]
     st.subheader(f"📊 {c_type} Entry & Smart Validation")
-    df = st.data_editor(pd.DataFrame([{"Cargo":"Shipment_1", "L":120, "W":100, "H":100, "Qty":5, "Gross_Weight_kg": 500, "Allow_Rotate": True}]), num_rows="dynamic", use_container_width=True)
+    
+    df = st.data_editor(pd.DataFrame([
+        {"Cargo":"Shipment_1", "L":120, "W":100, "H":100, "Qty":5, "Gross_Weight_kg": 500, "Allow_Rotate": True}
+    ]), num_rows="dynamic", use_container_width=True)
 
     if st.button("GENERATE VALIDATED 3D PLAN"):
         clean_df = df.dropna()
@@ -59,17 +68,16 @@ else:
             with m2: st.markdown(f'<div class="metric-card">Capacity<br><h3>{specs["MAX_CBM"]} CBM</h3></div>', unsafe_allow_html=True)
             with m3: st.markdown(f'<div class="metric-card">Utilization<br><h3>{util:.1f}%</h3></div>', unsafe_allow_html=True)
             with m4: st.markdown(f'<div class="metric-card">Total Weight<br><h3>{total_weight:,} kg</h3></div>', unsafe_allow_html=True)
+            
             st.progress(min(util/100, 1.0))
-
-            # Independent Checks
+            
+            # Checks
             if total_weight > 26000:
                 st.error(f"🚨 WEIGHT ALERT: Total Gross Weight ({total_weight:,} kg) exceeds 26,000 kg limit!")
-            
             if total_vol > specs['MAX_CBM']:
                 st.error("🚨 VOLUME OVERLOAD!")
-                sorted_l = sorted(shipment_vols, key=lambda x: x['vol'], reverse=True)
-                st.info(f"💡 Advice: Hold '{sorted_l[0]['name']}' ({sorted_l[0]['vol']:.2f} CBM)")
-                if not errors:
+            
+            if not errors:
                 fig = go.Figure()
                 CL, CW, CH = specs['L'], specs['W'], specs['H']
                 fig.add_trace(go.Scatter3d(x=[0,CL,CL,0,0,0,CL,CL,0,0,CL,CL,CL,CL,0,0], y=[0,0,CW,CW,0,0,0,CW,CW,0,0,0,CW,CW,CW,CW], z=[0,0,0,0,0,CH,CH,CH,CH,CH,CH,0,0,CH,CH,0], mode='lines', line=dict(color='black', width=3), showlegend=False))
@@ -95,6 +103,7 @@ else:
                 st.plotly_chart(fig, use_container_width=True)
                 st.markdown(legend_html + "</div>", unsafe_allow_html=True)
             else:
-                for e in errors: st.error(e)
+                for e in errors:
+                    st.error(e)
 
 st.markdown("<hr><center>© 2026 SMART CONSOL PLANNER - POWERED BY SUDATH</center>", unsafe_allow_html=True)
