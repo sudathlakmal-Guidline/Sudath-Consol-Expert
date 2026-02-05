@@ -50,10 +50,7 @@ df = st.data_editor(pd.DataFrame([
 if st.button("GENERATE VALIDATED 3D PLAN & REPORT", use_container_width=True):
     clean_df = df.dropna().copy()
     if not clean_df.empty:
-        # බර අනුව පෙළගැස්වීම
         clean_df = clean_df.sort_values(by='Weight_kg', ascending=False)
-        
-        # ගණනය කිරීම්
         total_vol = (clean_df['L'] * clean_df['W'] * clean_df['H'] * clean_df['Qty']).sum() / 1000000
         total_weight = clean_df['Weight_kg'].sum() 
         util_pct = (total_vol / specs['MAX_CBM']) * 100
@@ -63,22 +60,25 @@ if st.button("GENERATE VALIDATED 3D PLAN & REPORT", use_container_width=True):
         m2.metric("Container Capacity", f"{specs['MAX_CBM']} CBM")
         m3.metric("Utilization", f"{util_pct:.1f}%")
         m4.metric("Total Gross Weight", f"{total_weight:,.0f} kg")
-        
-        st.progress(min(util_pct/100, 1.0))
-        if total_weight > specs['MAX_KG']:
-            st.error(f"⚠️ WEIGHT ALERT: Total load ({total_weight:,.0f} kg) exceeds limit!")
 
-        # --- 3D Visualization ---
+        # 3D Visualization Logic
         fig = go.Figure()
         L_max, W_max, H_max = specs['L'], specs['W'], specs['H']
         fig.add_trace(go.Scatter3d(x=[0,L_max,L_max,0,0,0,L_max,L_max,0,0,L_max,L_max,L_max,L_max,0,0], y=[0,0,W_max,W_max,0,0,0,W_max,W_max,0,0,0,W_max,W_max,W_max,W_max], z=[0,0,0,0,0,H_max,H_max,H_max,H_max,H_max,H_max,0,0,H_max,H_max,0], mode='lines', line=dict(color='black', width=2), showlegend=False))
 
         cx, cy, cz, layer_h = 0, 0, 0, 0
-        colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b']
+        # RGB values for PDF colors
+        color_map = [
+            {'hex': '#1f77b4', 'rgb': (31, 119, 180)},
+            {'hex': '#ff7f0e', 'rgb': (255, 127, 14)},
+            {'hex': '#2ca02c', 'rgb': (44, 160, 44)},
+            {'hex': '#d62728', 'rgb': (214, 39, 40)},
+            {'hex': '#9467bd', 'rgb': (148, 103, 189)}
+        ]
         
         for idx, row in clean_df.reset_index().iterrows():
             l, w, h = row['L'], row['W'], row['H']
-            clr = colors[idx % len(colors)]
+            clr = color_map[idx % len(color_map)]['hex']
             for _ in range(int(row['Qty'])):
                 if cx + l > L_max: cx = 0; cy += w
                 if cy + w > W_max: cy = 0; cz += layer_h; layer_h = 0
@@ -90,19 +90,19 @@ if st.button("GENERATE VALIDATED 3D PLAN & REPORT", use_container_width=True):
         fig.update_layout(scene=dict(aspectmode='data'), margin=dict(l=0,r=0,b=0,t=0))
         st.plotly_chart(fig, use_container_width=True)
 
-        # --- PDF REPORT (IMPROVED) ---
+        # --- UPDATED PDF REPORT WITH COLOR LEGEND ---
         pdf = FPDF()
         pdf.add_page()
         
-        # Header
+        # Header Section
         pdf.set_fill_color(0, 74, 153)
         pdf.rect(0, 0, 210, 40, 'F')
         pdf.set_text_color(255, 255, 255)
         pdf.set_font("Arial", 'B', 20)
-        pdf.set_y(10)
+        pdf.set_y(12)
         pdf.cell(190, 10, 'SMART CONSOL LOADING REPORT', 0, 1, 'C')
         pdf.set_font("Arial", 'I', 12)
-        pdf.cell(190, 10, 'POWERED BY SUDATH', 0, 1, 'C')
+        pdf.cell(190, 8, 'POWERED BY SUDATH', 0, 1, 'C')
         
         pdf.ln(25)
         pdf.set_text_color(0, 0, 0)
@@ -119,35 +119,47 @@ if st.button("GENERATE VALIDATED 3D PLAN & REPORT", use_container_width=True):
         pdf.cell(90, 8, f"Total Volume: {total_vol:.2f} CBM", 0, 0)
         pdf.cell(90, 8, f"Space Utilization: {util_pct:.1f}%", 0, 1)
         
-        pdf.ln(10)
-        pdf.set_font("Arial", 'B', 13)
-        pdf.cell(190, 10, 'Cargo Loading Sequence (Heavy to Light)', 0, 1, 'L')
-        pdf.ln(2)
+        pdf.ln(15)
+
+        # --- NEW: COLOR KEY LEGEND IN PDF ---
+        pdf.set_font("Arial", 'B', 14)
+        pdf.cell(190, 10, 'Cargo Color Key & Sequence', 0, 1, 'L')
+        pdf.ln(5)
         
         # Table Header
         pdf.set_font("Arial", 'B', 10)
         pdf.set_fill_color(0, 74, 153)
         pdf.set_text_color(255, 255, 255)
-        pdf.cell(50, 10, 'Cargo Name', 1, 0, 'C', True)
-        pdf.cell(20, 10, 'Qty', 1, 0, 'C', True)
+        pdf.cell(15, 10, 'Color', 1, 0, 'C', True)
+        pdf.cell(45, 10, 'Cargo Name', 1, 0, 'C', True)
+        pdf.cell(15, 10, 'Qty', 1, 0, 'C', True)
         pdf.cell(60, 10, 'Dimensions (LxWxH cm)', 1, 0, 'C', True)
-        pdf.cell(60, 10, 'Total Shipment Weight', 1, 1, 'C', True)
+        pdf.cell(55, 10, 'Shipment Weight', 1, 1, 'C', True)
         
-        # Table Body
+        # Table Body with Color Boxes
         pdf.set_text_color(0, 0, 0)
         pdf.set_font("Arial", size=10)
-        for _, r in clean_df.iterrows():
-            pdf.cell(50, 10, str(r['Cargo']), 1)
-            pdf.cell(20, 10, str(int(r['Qty'])), 1, 0, 'C')
-            pdf.cell(60, 10, f"{r['L']} x {r['W']} x {r['H']}", 1, 0, 'C')
-            pdf.cell(60, 10, f"{r['Weight_kg']:,} kg", 1, 1, 'C')
+        for idx, r in clean_df.iterrows():
+            # Draw Color Box in Table
+            rgb = color_map[idx % len(color_map)]['rgb']
+            pdf.set_fill_color(rgb[0], rgb[1], rgb[2])
+            pdf.cell(15, 10, '', 1, 0, 'C', True) # Color cell
             
-        pdf.ln(15)
-        pdf.set_font("Arial", 'I', 8)
-        pdf.cell(190, 10, f"Generated on: {pd.Timestamp.now().strftime('%Y-%m-%d %H:%M')}", 0, 1, 'R')
+            pdf.cell(45, 10, str(r['Cargo']), 1)
+            pdf.cell(15, 10, str(int(r['Qty'])), 1, 0, 'C')
+            pdf.cell(60, 10, f"{r['L']} x {r['W']} x {r['H']}", 1, 0, 'C')
+            pdf.cell(55, 10, f"{r['Weight_kg']:,} kg", 1, 1, 'C')
+            
+        pdf.ln(20)
+        pdf.set_font("Arial", 'I', 9)
+        pdf.set_text_color(100, 100, 100)
+        pdf.multi_cell(190, 5, "Note: Heavy cargo is prioritized at the bottom of the container. Please follow the color sequence above for efficient loading.")
+        
+        pdf.set_y(-25)
+        pdf.cell(190, 10, f"Generated: {pd.Timestamp.now().strftime('%Y-%m-%d %H:%M')} | © SMART CONSOL PRO", 0, 0, 'R')
 
         pdf_bytes = pdf.output(dest='S').encode('latin-1')
         b64 = base64.b64encode(pdf_bytes).decode()
-        st.markdown(f'<a href="data:application/octet-stream;base64,{b64}" download="Consol_Plan_Sudath.pdf" style="display:inline-block; padding:15px; background-color:#28a745; color:white; border-radius:10px; text-decoration:none; font-weight:bold;">📥 DOWNLOAD PROFESSIONAL REPORT</a>', unsafe_allow_html=True)
+        st.markdown(f'<a href="data:application/octet-stream;base64,{b64}" download="Consol_Plan_Sudath_PRO.pdf" style="display:inline-block; padding:15px; background-color:#28a745; color:white; border-radius:10px; text-decoration:none; font-weight:bold; width:100%; text-align:center;">📥 DOWNLOAD FINAL LOADING REPORT</a>', unsafe_allow_html=True)
 
 st.markdown("<hr><center>© 2026 SMART CONSOL PLANNER - POWERED BY SUDATH</center>", unsafe_allow_html=True)
