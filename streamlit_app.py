@@ -13,35 +13,46 @@ CONTAINERS = {
     "40HC": {"L": 1200, "W": 230, "H": 265, "MAX_CBM": 70.0, "MAX_KG": 28000}
 }
 
-# --- 2. LOGIN ---
+# --- 2. LOGIN LOGIC ---
 if 'auth' not in st.session_state:
     st.session_state.auth = False
 
 if not st.session_state.auth:
-    st.markdown("<h2 style='text-align: center;'>🚢 SMART CONSOL SYSTEM</h2>", unsafe_allow_html=True)
-    with st.columns([1,1.5,1])[1]:
-        u = st.text_input("User ID")
-        p = st.text_input("Password", type="password")
+    st.markdown("<br><br><h2 style='text-align: center;'>🚢 SMART CONSOL SYSTEM</h2>", unsafe_allow_html=True)
+    
+    # Login box එක මැදට ගැනීමට columns භාවිතා කිරීම
+    _, col2, _ = st.columns([1, 1.5, 1])
+    
+    with col2:
+        st.info("Please login to access the system")
+        u = st.text_input("User ID", key="user_id", placeholder="e.g. sudath")
+        p = st.text_input("Password", type="password", key="password", placeholder="e.g. admin123")
+        
         if st.button("LOGIN", use_container_width=True):
+            # මෙතන 'sudath' (අකුරු කුඩා වුවත් නැතත්) සහ 'admin123' පරීක්ෂා කරයි
             if u.strip().lower() == "sudath" and p == "admin123":
                 st.session_state.auth = True
+                st.success("Login Successful!")
                 st.rerun()
-            else: st.error("Invalid Credentials")
-    st.stop()
+            else:
+                st.error("Invalid Credentials. Please try again.")
+    st.stop() # Login වෙනකම් ඉතිරි ටික පෙන්නන්නේ නැහැ
 
-# --- 3. MAIN APP ---
+# --- 3. MAIN APP (Logged In) ---
 st.markdown('<h1 style="background-color:#004a99; color:white; text-align:center; padding:10px; border-radius:10px;">🚢 SMART CONSOL PLANNER - POWERED BY SUDATH</h1>', unsafe_allow_html=True)
 
 with st.sidebar:
-    st.success("✅ Logged in: Sudath")
+    st.success(f"✅ Logged in: Sudath")
     c_type = st.selectbox("Select Container Type:", list(CONTAINERS.keys()))
     specs = CONTAINERS[c_type]
-    if st.button("LOGOUT"):
+    st.divider()
+    if st.button("LOGOUT", use_container_width=True):
         st.session_state.auth = False
         st.rerun()
 
 st.subheader(f"📊 {c_type} Cargo Entry & Validation")
 
+# Data Entry Table
 df = st.data_editor(pd.DataFrame([
     {"Cargo":"Shipment_1", "L":120, "W":100, "H":100, "Qty":5, "Weight_kg": 500},
     {"Cargo":"Shipment_2", "L":115, "W":115, "H":115, "Qty":10, "Weight_kg": 1500}
@@ -55,6 +66,7 @@ if st.button("GENERATE VALIDATED 3D PLAN & REPORT", use_container_width=True):
         total_weight = clean_df['Weight_kg'].sum() 
         util_pct = (total_vol / specs['MAX_CBM']) * 100
         
+        # Metrics Display
         m1, m2, m3, m4 = st.columns(4)
         m1.metric("Total Volume", f"{total_vol:.2f} CBM")
         m2.metric("Container Capacity", f"{specs['MAX_CBM']} CBM")
@@ -64,10 +76,15 @@ if st.button("GENERATE VALIDATED 3D PLAN & REPORT", use_container_width=True):
         # 3D Visualization Logic
         fig = go.Figure()
         L_max, W_max, H_max = specs['L'], specs['W'], specs['H']
-        fig.add_trace(go.Scatter3d(x=[0,L_max,L_max,0,0,0,L_max,L_max,0,0,L_max,L_max,L_max,L_max,0,0], y=[0,0,W_max,W_max,0,0,0,W_max,W_max,0,0,0,W_max,W_max,W_max,W_max], z=[0,0,0,0,0,H_max,H_max,H_max,H_max,H_max,H_max,0,0,H_max,H_max,0], mode='lines', line=dict(color='black', width=2), showlegend=False))
+        
+        # Draw Container Outline
+        fig.add_trace(go.Scatter3d(
+            x=[0,L_max,L_max,0,0,0,L_max,L_max,0,0,L_max,L_max,L_max,L_max,0,0], 
+            y=[0,0,W_max,W_max,0,0,0,W_max,W_max,0,0,0,W_max,W_max,W_max,W_max], 
+            z=[0,0,0,0,0,H_max,H_max,H_max,H_max,H_max,H_max,0,0,H_max,H_max,0], 
+            mode='lines', line=dict(color='black', width=2), showlegend=False))
 
         cx, cy, cz, layer_h = 0, 0, 0, 0
-        # RGB values for PDF colors
         color_map = [
             {'hex': '#1f77b4', 'rgb': (31, 119, 180)},
             {'hex': '#ff7f0e', 'rgb': (255, 127, 14)},
@@ -76,6 +93,7 @@ if st.button("GENERATE VALIDATED 3D PLAN & REPORT", use_container_width=True):
             {'hex': '#9467bd', 'rgb': (148, 103, 189)}
         ]
         
+        # Packing Simulation
         for idx, row in clean_df.reset_index().iterrows():
             l, w, h = row['L'], row['W'], row['H']
             clr = color_map[idx % len(color_map)]['hex']
@@ -83,18 +101,22 @@ if st.button("GENERATE VALIDATED 3D PLAN & REPORT", use_container_width=True):
                 if cx + l > L_max: cx = 0; cy += w
                 if cy + w > W_max: cy = 0; cz += layer_h; layer_h = 0
                 if cz + h <= H_max:
-                    fig.add_trace(go.Mesh3d(x=[cx,cx,cx+l,cx+l,cx,cx,cx+l,cx+l], y=[cy,cy+w,cy+w,cy,cy,cy+w,cy+w,cy], z=[cz,cz,cz,cz,cz+h,cz+h,cz+h,cz+h], color=clr, opacity=0.8, alphahull=0, name=row['Cargo']))
+                    fig.add_trace(go.Mesh3d(
+                        x=[cx,cx,cx+l,cx+l,cx,cx,cx+l,cx+l], 
+                        y=[cy,cy+w,cy+w,cy,cy,cy+w,cy+w,cy], 
+                        z=[cz,cz,cz,cz,cz+h,cz+h,cz+h,cz+h], 
+                        color=clr, opacity=0.8, alphahull=0, name=row['Cargo']))
                     cx += l
                     layer_h = max(layer_h, h)
 
         fig.update_layout(scene=dict(aspectmode='data'), margin=dict(l=0,r=0,b=0,t=0))
         st.plotly_chart(fig, use_container_width=True)
 
-        # --- UPDATED PDF REPORT WITH COLOR LEGEND ---
+        # --- PDF REPORT GENERATION ---
         pdf = FPDF()
         pdf.add_page()
         
-        # Header Section
+        # Header
         pdf.set_fill_color(0, 74, 153)
         pdf.rect(0, 0, 210, 40, 'F')
         pdf.set_text_color(255, 255, 255)
@@ -107,7 +129,7 @@ if st.button("GENERATE VALIDATED 3D PLAN & REPORT", use_container_width=True):
         pdf.ln(25)
         pdf.set_text_color(0, 0, 0)
         
-        # Summary Box
+        # Summary
         pdf.set_fill_color(240, 240, 240)
         pdf.set_font("Arial", 'B', 11)
         pdf.cell(190, 30, '', 1, 0, 'L', True)
@@ -121,12 +143,11 @@ if st.button("GENERATE VALIDATED 3D PLAN & REPORT", use_container_width=True):
         
         pdf.ln(15)
 
-        # --- NEW: COLOR KEY LEGEND IN PDF ---
+        # Legend Table
         pdf.set_font("Arial", 'B', 14)
         pdf.cell(190, 10, 'Cargo Color Key & Sequence', 0, 1, 'L')
         pdf.ln(5)
         
-        # Table Header
         pdf.set_font("Arial", 'B', 10)
         pdf.set_fill_color(0, 74, 153)
         pdf.set_text_color(255, 255, 255)
@@ -136,15 +157,12 @@ if st.button("GENERATE VALIDATED 3D PLAN & REPORT", use_container_width=True):
         pdf.cell(60, 10, 'Dimensions (LxWxH cm)', 1, 0, 'C', True)
         pdf.cell(55, 10, 'Shipment Weight', 1, 1, 'C', True)
         
-        # Table Body with Color Boxes
         pdf.set_text_color(0, 0, 0)
         pdf.set_font("Arial", size=10)
-        for idx, r in clean_df.iterrows():
-            # Draw Color Box in Table
+        for idx, r in clean_df.reset_index().iterrows():
             rgb = color_map[idx % len(color_map)]['rgb']
             pdf.set_fill_color(rgb[0], rgb[1], rgb[2])
-            pdf.cell(15, 10, '', 1, 0, 'C', True) # Color cell
-            
+            pdf.cell(15, 10, '', 1, 0, 'C', True) 
             pdf.cell(45, 10, str(r['Cargo']), 1)
             pdf.cell(15, 10, str(int(r['Qty'])), 1, 0, 'C')
             pdf.cell(60, 10, f"{r['L']} x {r['W']} x {r['H']}", 1, 0, 'C')
@@ -158,8 +176,10 @@ if st.button("GENERATE VALIDATED 3D PLAN & REPORT", use_container_width=True):
         pdf.set_y(-25)
         pdf.cell(190, 10, f"Generated: {pd.Timestamp.now().strftime('%Y-%m-%d %H:%M')} | © SMART CONSOL PRO", 0, 0, 'R')
 
+        # Download Link
         pdf_bytes = pdf.output(dest='S').encode('latin-1')
         b64 = base64.b64encode(pdf_bytes).decode()
         st.markdown(f'<a href="data:application/octet-stream;base64,{b64}" download="Consol_Plan_Sudath_PRO.pdf" style="display:inline-block; padding:15px; background-color:#28a745; color:white; border-radius:10px; text-decoration:none; font-weight:bold; width:100%; text-align:center;">📥 DOWNLOAD FINAL LOADING REPORT</a>', unsafe_allow_html=True)
 
-st.markdown("<hr><center>© 2026 SMART CONSOL PLANNER - POWERED BY SUDATH</center>", unsafe_allow_html=True)
+# Footer
+st.markdown("<br><hr><center>© 2026 SMART CONSOL PLANNER - POWERED BY SUDATH</center>", unsafe_allow_html=True)
