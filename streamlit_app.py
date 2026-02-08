@@ -6,7 +6,21 @@ import base64
 import sqlite3
 from datetime import datetime
 
-# --- 1. DATABASE SETUP ---
+# --- 1. CONFIG & SECURITY (පිටුවේ මෙනු සැඟවීම) ---
+st.set_page_config(page_title="SMART CONSOL PLANNER - SUDATH PRO", layout="wide")
+
+# පරිශීලකයාට GitHub සහ වෙනත් settings පෙනීම නැවැත්වීමට CSS භාවිතය
+hide_st_style = """
+            <style>
+            #MainMenu {visibility: hidden;}
+            footer {visibility: hidden;}
+            header {visibility: hidden;}
+            .viewerBadge_container__1QS1n {display: none !important;}
+            </style>
+            """
+st.markdown(hide_st_style, unsafe_allow_html=True)
+
+# --- 2. DATABASE SETUP ---
 def init_db():
     conn = sqlite3.connect('sudath_consol_pro.db')
     c = conn.cursor()
@@ -19,16 +33,6 @@ def init_db():
     conn.close()
 
 init_db()
-
-# --- 2. CONFIG ---
-APP_VERSION = "v2.3 (COLOR KEY & WEIGHT FIXED)"
-st.set_page_config(page_title="SMART CONSOL PLANNER - SUDATH PRO", layout="wide")
-
-CONTAINERS = {
-    "20GP": {"L": 585, "W": 230, "H": 230, "MAX_CBM": 31.0, "MAX_KG": 26000},
-    "40GP": {"L": 1200, "W": 230, "H": 230, "MAX_CBM": 58.0, "MAX_KG": 26000},
-    "40HC": {"L": 1200, "W": 230, "H": 265, "MAX_CBM": 70.0, "MAX_KG": 26000}
-}
 
 def log_activity(email, action):
     conn = sqlite3.connect('sudath_consol_pro.db')
@@ -84,6 +88,11 @@ with st.sidebar:
         if st.button("📊 VIEW USER REPORTS"):
             st.session_state.show_admin = not st.session_state.get('show_admin', False)
     
+    CONTAINERS = {
+        "20GP": {"L": 585, "W": 230, "H": 230, "MAX_CBM": 31.0, "MAX_KG": 26000},
+        "40GP": {"L": 1200, "W": 230, "H": 230, "MAX_CBM": 58.0, "MAX_KG": 26000},
+        "40HC": {"L": 1200, "W": 230, "H": 265, "MAX_CBM": 70.0, "MAX_KG": 26000}
+    }
     c_type = st.selectbox("Select Container Type:", list(CONTAINERS.keys()))
     specs = CONTAINERS[c_type]
     if st.button("LOGOUT"):
@@ -95,8 +104,8 @@ if st.session_state.get('show_admin', False):
     conn = sqlite3.connect('sudath_consol_pro.db')
     st.subheader("👥 User Analytics")
     col1, col2 = st.columns(2)
-    with col1: st.dataframe(pd.read_sql("SELECT email, reg_date FROM users", conn))
-    with col2: st.dataframe(pd.read_sql("SELECT * FROM activity_logs ORDER BY timestamp DESC", conn))
+    with col1: st.dataframe(pd.read_sql("SELECT email, reg_date FROM users", conn), use_container_width=True)
+    with col2: st.dataframe(pd.read_sql("SELECT * FROM activity_logs ORDER BY timestamp DESC", conn), use_container_width=True)
     conn.close()
 
 # --- CARGO ENTRY ---
@@ -108,7 +117,7 @@ if st.button("GENERATE VALIDATED 3D PLAN & REPORT", use_container_width=True):
     clean_df = df.dropna().copy()
     if not clean_df.empty:
         total_vol = (clean_df['L'] * clean_df['W'] * clean_df['H'] * clean_df['Qty']).sum() / 1000000
-        total_weight = clean_df['Weight_kg'].sum() # ✅ බර Qty එකෙන් වැඩි කරන්නේ නැත
+        total_weight = clean_df['Weight_kg'].sum() 
         util_pct = (total_vol / specs['MAX_CBM']) * 100
 
         m1, m2, m3, m4 = st.columns(4)
@@ -140,19 +149,16 @@ if st.button("GENERATE VALIDATED 3D PLAN & REPORT", use_container_width=True):
         fig.update_layout(scene=dict(aspectmode='data'), margin=dict(l=0,r=0,b=0,t=0))
         st.plotly_chart(fig, use_container_width=True)
 
-        # --- PDF REPORT WITH COLOR KEY ---
+        # --- PDF REPORT ---
         pdf = FPDF()
         pdf.add_page()
         pdf.set_fill_color(0, 74, 153); pdf.rect(0, 0, 210, 40, 'F')
         pdf.set_text_color(255, 255, 255); pdf.set_font("Arial", 'B', 20); pdf.text(45, 25, "SMART CONSOL LOADING REPORT")
         pdf.set_text_color(0, 0, 0); pdf.set_font("Arial", 'B', 12); pdf.ln(45)
-        
         pdf.cell(0, 10, f"Summary: {total_vol:.2f} CBM | Weight: {total_weight} kg | Util: {util_pct:.1f}%", 0, 1)
-        pdf.ln(5); pdf.set_font("Arial", 'B', 12); pdf.cell(0, 10, "Cargo Color Legend & Details:", 0, 1)
         
-        # Color Legend Table
-        pdf.set_font("Arial", 'B', 10)
-        pdf.cell(20, 10, "Color", 1, 0, 'C'); pdf.cell(50, 10, "Cargo ID", 1, 0, 'C'); pdf.cell(30, 10, "Qty", 1, 0, 'C'); pdf.cell(50, 10, "Dimensions", 1, 0, 'C'); pdf.cell(40, 10, "Total Weight", 1, 1, 'C')
+        pdf.ln(5); pdf.set_font("Arial", 'B', 10)
+        pdf.cell(20, 10, "Color", 1, 0, 'C'); pdf.cell(50, 10, "Cargo ID", 1, 0, 'C'); pdf.cell(30, 10, "Qty", 1, 0, 'C'); pdf.cell(50, 10, "Dimensions", 1, 0, 'C'); pdf.cell(40, 10, "Weight", 1, 1, 'C')
         
         pdf.set_font("Arial", '', 10)
         for idx, row in clean_df.reset_index().iterrows():
@@ -165,8 +171,8 @@ if st.button("GENERATE VALIDATED 3D PLAN & REPORT", use_container_width=True):
 
         pdf_output = pdf.output(dest='S').encode('latin-1')
         b64 = base64.b64encode(pdf_output).decode()
-        st.markdown(f'<a href="data:application/octet-stream;base64,{b64}" download="Sudath_Consol_Report.pdf" style="display:block; padding:15px; background:#28a745; color:white; text-align:center; border-radius:10px; font-weight:bold; text-decoration:none;">📥 DOWNLOAD REPORT WITH COLOR KEY</a>', unsafe_allow_html=True)
+        st.markdown(f'<a href="data:application/octet-stream;base64,{b64}" download="Sudath_Consol_Report.pdf" style="display:block; padding:15px; background:#28a745; color:white; text-align:center; border-radius:10px; font-weight:bold; text-decoration:none;">📥 DOWNLOAD REPORT</a>', unsafe_allow_html=True)
         log_activity(st.session_state.user_email, f"Generated Report: {total_weight}kg")
 
 st.markdown("---")
-st.markdown(f"<center>© 2026 POWERED BY SUDATH PRO | {APP_VERSION}</center>", unsafe_allow_html=True)
+st.markdown(f"<center>© 2026 POWERED BY SUDATH PRO | v2.5 FINAL</center>", unsafe_allow_html=True)
