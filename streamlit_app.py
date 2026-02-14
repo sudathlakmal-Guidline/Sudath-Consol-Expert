@@ -9,15 +9,16 @@ from datetime import datetime
 # --- 1. CONFIG & SECURITY ---
 st.set_page_config(page_title="SMART CONSOL PLANNER - SUDATH PRO", layout="wide")
 
-hide_st_style = """
-            <style>
-            #MainMenu {visibility: hidden;}
-            footer {visibility: hidden;}
-            header {visibility: hidden;}
-            .viewerBadge_container__1QS1n {display: none !important;}
-            </style>
-            """
-st.markdown(hide_st_style, unsafe_allow_html=True)
+# මෙන්න මේ කොටස Comment කළා, එවිට Navigation (Explore, Discuss) ආයෙත් පෙනෙන්න ගනී.
+# hide_st_style = """
+#             <style>
+#             #MainMenu {visibility: hidden;}
+#             footer {visibility: hidden;}
+#             header {visibility: hidden;}
+#             .viewerBadge_container__1QS1n {display: none !important;}
+#             </style>
+#             """
+# st.markdown(hide_st_style, unsafe_allow_html=True)
 
 # --- 2. DATABASE SETUP ---
 def init_db():
