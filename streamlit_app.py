@@ -10,11 +10,14 @@ import google.generativeai as genai
 # --- 1. CONFIG & HIGH SECURITY ---
 st.set_page_config(page_title="SMART CONSOL PRO - Powered by Sudath", layout="wide")
 
-# AI CONFIGURATION
-# මම මෙහි ඔබ ලබාදුන් නිවැරදි Key එක ඇතුළත් කළා
-API_KEY = "AIzaSyC3olT0UFAGBy4GiLbARwv0eA6BIsKbkzQ" 
-genai.configure(api_key=API_KEY)
-ai_model = genai.GenerativeModel('gemini-1.5-flash')
+# නිවැරදි කරන ලද AI CONFIGURATION කොටස
+API_KEY = "AIzaSyC3olT0UFAGBy4GiLbARwv0eA6BIsKbkzQ" # මෙහි කිසිම හිස්තැනක් නොතබන්න
+
+try:
+    genai.configure(api_key=API_KEY)
+    ai_model = genai.GenerativeModel('gemini-1.5-flash')
+except Exception as e:
+    st.error(f"Configuration Error: {e}")
 
 # CSS for Security and Branding
 hide_st_style = """
