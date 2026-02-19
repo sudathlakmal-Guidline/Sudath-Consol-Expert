@@ -100,10 +100,9 @@ CONTAINERS = {
 }
 
 with st.sidebar:
-    st.image("https://cdn-icons-png.flaticon.com/512/2343/2343894.png", width=100) # Simple Cargo Logo
+    st.image("https://cdn-icons-png.flaticon.com/512/2343/2343894.png", width=100)
     st.success(f"✅ User: {st.session_state.user_email}")
     
-    # Secure Admin Access
     if st.session_state.user_email == "sudath.lakmal@gmail.com":
         st.subheader("👨‍✈️ ADMIN CONTROL")
         if st.button("📊 VIEW USER REPORTS"):
@@ -113,16 +112,24 @@ with st.sidebar:
     c_type = st.selectbox("Select Container Type:", list(CONTAINERS.keys()))
     specs = CONTAINERS[c_type]
     
-    # Share Option
     st.subheader("🔗 Share with Friends")
     share_link = "https://sudath-consol-expert-tgbirizblcv4mfney8vvpz.streamlit.app/"
     st.code(share_link)
     
-    # Rating Feature
     st.subheader("⭐ Rate our App")
     rating = st.slider("How helpful is this?", 1, 5, 5)
     if st.button("Submit Rating"):
         st.toast(f"Thank you for rating us {rating} stars!")
+
+    # --- AI CHATBOT INTEGRATION ---
+    st.divider()
+    st.subheader("🤖 Smart Support (AI)")
+    ai_msg = st.text_input("Ask about logistics...")
+    if st.button("Ask AI"):
+        if ai_msg:
+            st.info(f"AI: Thinking about '{ai_msg}'... (This module can connect to OpenAI/Gemini APIs for live responses)")
+        else:
+            st.warning("Please enter a question.")
 
     if st.button("LOGOUT"):
         st.session_state.auth = False
@@ -139,23 +146,29 @@ if st.session_state.get('show_admin', False):
 
 # --- CARGO ENTRY ---
 st.subheader(f"📊 {c_type} Cargo Entry")
-init_data = [{"Cargo": "PKG_001", "L": 120, "W": 100, "H": 100, "Qty": 5, "Weight_kg": 500}]
+init_data = [{"Cargo": "PKG_001", "L": 120, "W": 100, "H": 100, "Qty": 5, "Gross_Weight_kg": 500}]
 df = st.data_editor(pd.DataFrame(init_data), num_rows="dynamic", use_container_width=True)
 
 if st.button("GENERATE VALIDATED 3D PLAN & REPORT", use_container_width=True):
     clean_df = df.dropna().copy()
     if not clean_df.empty:
+        # 1. Validation Logic
+        total_vol = (clean_df['L'] * clean_df['W'] * clean_df['H'] * clean_df['Qty']).sum() / 1000000
+        # 2. Correct Weight Logic: Summing Gross Weight as total per line
+        total_weight = clean_df['Gross_Weight_kg'].sum()
+        
         invalid_cargo = []
         for idx, row in clean_df.iterrows():
             if row['L'] > specs['L'] or row['W'] > specs['W'] or row['H'] > specs['H']:
-                invalid_cargo.append(row['Cargo'])
+                invalid_cargo.append(f"{row['Cargo']} (Dimension)")
+        
+        if total_vol > specs['MAX_CBM']:
+            invalid_cargo.append("Total Capacity Limit")
 
         if invalid_cargo:
-            st.error(f"❌ Loading Rejected! Oversized items detected.")
-            log_activity(st.session_state.user_email, f"Rejected: {c_type} (Oversized)")
+            st.error(f"❌ Loading Rejected! {', '.join(invalid_cargo)} exceeded limits.")
+            log_activity(st.session_state.user_email, f"Rejected: {c_type} (Capacity/Oversized)")
         else:
-            total_vol = (clean_df['L'] * clean_df['W'] * clean_df['H'] * clean_df['Qty']).sum() / 1000000
-            total_weight = (clean_df['Weight_kg'] * clean_df['Qty']).sum()
             util_pct = (total_vol / specs['MAX_CBM']) * 100
 
             m1, m2, m3, m4 = st.columns(4)
@@ -192,7 +205,7 @@ if st.button("GENERATE VALIDATED 3D PLAN & REPORT", use_container_width=True):
             pdf.set_text_color(255, 255, 255); pdf.set_font("Arial", 'B', 20); pdf.text(45, 25, "SMART CONSOL LOADING REPORT")
             pdf.set_text_color(0, 0, 0); pdf.set_font("Arial", 'I', 10); pdf.text(160, 35, "Powered by Sudath")
             pdf.set_font("Arial", 'B', 12); pdf.ln(45)
-            pdf.cell(0, 10, f"Summary: {total_vol:.2f} CBM | Total Weight: {total_weight} kg", 0, 1)
+            pdf.cell(0, 10, f"Summary: {total_vol:.2f} CBM | Total Gross Weight: {total_weight} kg", 0, 1)
             
             pdf_output = pdf.output(dest='S').encode('latin-1')
             b64 = base64.b64encode(pdf_output).decode()
