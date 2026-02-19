@@ -5,9 +5,15 @@ from fpdf import FPDF
 import base64
 import sqlite3
 from datetime import datetime
+import google.generativeai as genai
 
 # --- 1. CONFIG & HIGH SECURITY ---
 st.set_page_config(page_title="SMART CONSOL PRO - Powered by Sudath", layout="wide")
+
+# AI CONFIGURATION
+API_KEY = "AIzaSyC3olT0UFAGBy4GiLbARwv0eA6BIsKbkzQ" 
+genai.configure(api_key=API_KEY)
+ai_model = genai.GenerativeModel('gemini-1.5-flash')
 
 # CSS for Security and Branding
 hide_st_style = """
@@ -39,7 +45,6 @@ def init_db():
                  (email TEXT PRIMARY KEY, password TEXT, reg_date TEXT)''')
     c.execute('''CREATE TABLE IF NOT EXISTS activity_logs 
                  (email TEXT, action TEXT, timestamp TEXT)''')
-    # Updated Admin Credentials
     c.execute("INSERT OR IGNORE INTO users VALUES ('sudath.lakmal@gmail.com', '853602795@@@vSL', '2026-02-08')")
     conn.commit()
     conn.close()
@@ -121,13 +126,19 @@ with st.sidebar:
     if st.button("Submit Rating"):
         st.toast(f"Thank you for rating us {rating} stars!")
 
-    # --- AI CHATBOT INTEGRATION ---
+    # --- LIVE AI CHATBOT SECTION ---
     st.divider()
     st.subheader("🤖 Smart Support (AI)")
-    ai_msg = st.text_input("Ask about logistics...")
+    ai_msg = st.text_input("Ask about logistics...", placeholder="e.g. Max tare weight of 20GP")
     if st.button("Ask AI"):
         if ai_msg:
-            st.info(f"AI: Thinking about '{ai_msg}'... (This module can connect to OpenAI/Gemini APIs for live responses)")
+            with st.spinner("Expert is thinking..."):
+                try:
+                    response = ai_model.generate_content(f"You are a logistics expert. Answer this query: {ai_msg}")
+                    st.info(response.text)
+                    log_activity(st.session_state.user_email, f"AI Query: {ai_msg[:30]}")
+                except Exception as e:
+                    st.error(f"AI Connection Error: {e}")
         else:
             st.warning("Please enter a question.")
 
@@ -152,25 +163,24 @@ df = st.data_editor(pd.DataFrame(init_data), num_rows="dynamic", use_container_w
 if st.button("GENERATE VALIDATED 3D PLAN & REPORT", use_container_width=True):
     clean_df = df.dropna().copy()
     if not clean_df.empty:
-        # 1. Validation Logic
+        # Fixed Weight & CBM Calculation
         total_vol = (clean_df['L'] * clean_df['W'] * clean_df['H'] * clean_df['Qty']).sum() / 1000000
-        # 2. Correct Weight Logic: Summing Gross Weight as total per line
         total_weight = clean_df['Gross_Weight_kg'].sum()
         
         invalid_cargo = []
         for idx, row in clean_df.iterrows():
             if row['L'] > specs['L'] or row['W'] > specs['W'] or row['H'] > specs['H']:
-                invalid_cargo.append(f"{row['Cargo']} (Dimension)")
+                invalid_cargo.append(f"{row['Cargo']} (Size Exceeded)")
         
+        # STOP processing if capacity is exceeded
         if total_vol > specs['MAX_CBM']:
-            invalid_cargo.append("Total Capacity Limit")
+            invalid_cargo.append(f"Total CBM Limit ({total_vol:.2f} / {specs['MAX_CBM']})")
 
         if invalid_cargo:
-            st.error(f"❌ Loading Rejected! {', '.join(invalid_cargo)} exceeded limits.")
-            log_activity(st.session_state.user_email, f"Rejected: {c_type} (Capacity/Oversized)")
+            st.error(f"❌ Loading Rejected! {', '.join(invalid_cargo)}")
+            log_activity(st.session_state.user_email, f"Rejected: {c_type} (Limit Exceeded)")
         else:
             util_pct = (total_vol / specs['MAX_CBM']) * 100
-
             m1, m2, m3, m4 = st.columns(4)
             m1.metric("Total Volume", f"{total_vol:.2f} CBM")
             m2.metric("Capacity", f"{specs['MAX_CBM']} CBM")
