@@ -11,6 +11,7 @@ import google.generativeai as genai
 st.set_page_config(page_title="SMART CONSOL PRO - Powered by Sudath", layout="wide")
 
 # AI CONFIGURATION
+# මම මෙහි ඔබ ලබාදුන් නිවැරදි Key එක ඇතුළත් කළා
 API_KEY = "AIzaSyC3olT0UFAGBy4GiLbARwv0eA6BIsKbkzQ" 
 genai.configure(api_key=API_KEY)
 ai_model = genai.GenerativeModel('gemini-1.5-flash')
