@@ -126,9 +126,13 @@ if st.button("GENERATE REAL-WORLD 3D LOAD PLAN", use_container_width=True):
     if clean_df.empty:
         st.warning("Please enter cargo details.")
     else:
-        # Sort by Weight (Heavy items first for ground layer)
+        # Sort by Weight (Heavy items first for bottom-up loading)
         clean_df = clean_df.sort_values(by="Gross_Weight_kg", ascending=False)
+        
+        # Calculate Volume & Weight
         total_vol = (clean_df['L'] * clean_df['W'] * clean_df['H'] * clean_df['Qty']).sum() / 1000000
+        total_weight = (clean_df['Gross_Weight_kg'] * clean_df['Qty']).sum()
+        utilization = (total_vol / specs['MAX_CBM']) * 100
         
         too_large = [row['Cargo'] for _, row in clean_df.iterrows() if row['L'] > specs['L'] or row['W'] > specs['W'] or row['H'] > specs['H']]
         
@@ -137,54 +141,72 @@ if st.button("GENERATE REAL-WORLD 3D LOAD PLAN", use_container_width=True):
         elif total_vol > specs['MAX_CBM']:
             st.error(f"❌ Capacity Exceeded: {total_vol:.2f} CBM > {specs['MAX_CBM']} CBM")
         else:
-            # Metrics
-            c1, c2, c3 = st.columns(3)
-            c1.metric("Utilization", f"{(total_vol/specs['MAX_CBM'])*100:.1f}%")
-            c2.metric("Total Weight", f"{clean_df['Gross_Weight_kg'].sum()} kg")
-            c3.metric("Load Status", "✅ Professional Stack")
+            # --- PROFESSIONAL METRICS DISPLAY ---
+            m1, m2, m3, m4 = st.columns(4)
+            m1.metric("Container Capacity", f"{specs['MAX_CBM']} CBM")
+            m2.metric("Total Cargo Volume", f"{total_vol:.2f} CBM")
+            m3.metric("Utilization", f"{utilization:.1f}%")
+            m4.metric("Total Gross Weight", f"{total_weight} kg")
 
-            # Real-world Layered Loading Logic
+            # Layered Loading Logic
             fig = go.Figure()
-            colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd']
+            colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2']
             curr_x, curr_y, curr_z = 0, 0, 0
             layer_max_h = 0
             
             for i, row in clean_df.iterrows():
                 l, w, h, qty = row['L'], row['W'], row['H'], int(row['Qty'])
                 for q in range(qty):
-                    # Check Width
+                    # Wrap across Width
                     if curr_y + w > specs['W']:
                         curr_y = 0; curr_x += l
-                    # Check Length (If row full, start next layer or move back)
+                    # Wrap across Length (If front is full, start next vertical layer)
                     if curr_x + l > specs['L']:
                         curr_x = 0; curr_y = 0; curr_z += layer_max_h; layer_max_h = 0
-                    # Check Height
+                    
+                    # Final Height Check
                     if curr_z + h > specs['H']:
-                        st.warning(f"Could not fit all {row['Cargo']} due to height limits.")
+                        st.warning(f"⚠️ Some units of {row['Cargo']} skipped: Vertical limit reached.")
                         break
 
+                    # Draw 3D Box
                     fig.add_trace(go.Mesh3d(
                         x=[curr_x, curr_x, curr_x+l, curr_x+l, curr_x, curr_x, curr_x+l, curr_x+l],
                         y=[curr_y, curr_y+w, curr_y+w, curr_y, curr_y, curr_y+w, curr_y+w, curr_y],
                         z=[curr_z, curr_z, curr_z, curr_z, curr_z+h, curr_z+h, curr_z+h, curr_z+h],
-                        color=colors[i % len(colors)], opacity=0.8, alphahull=0, name=row['Cargo'], showlegend=(q==0)
+                        color=colors[i % len(colors)], 
+                        opacity=0.85, 
+                        alphahull=0, 
+                        name=f"{row['Cargo']} (W:{row['Gross_Weight_kg']}kg)", 
+                        showlegend=(q==0)
                     ))
+                    
                     curr_y += w
                     layer_max_h = max(layer_max_h, h)
 
-            fig.update_layout(scene=dict(
-                xaxis=dict(title='Length (Head to Tail)', range=[0, specs['L']]),
-                yaxis=dict(title='Width', range=[0, specs['W']]),
-                zaxis=dict(title='Height', range=[0, specs['H']]),
-                aspectmode='manual', aspectratio=dict(x=specs['L']/100, y=specs['W']/100, z=specs['H']/100)
-            ))
+            fig.update_layout(
+                title=f"3D Load Plan - {c_type} (Capacity: {specs['MAX_CBM']} CBM)",
+                scene=dict(
+                    xaxis=dict(title='Length (Head to Tail)', range=[0, specs['L']], backgroundcolor="rgb(230, 230,230)"),
+                    yaxis=dict(title='Width', range=[0, specs['W']], backgroundcolor="rgb(220, 220, 220)"),
+                    zaxis=dict(title='Height', range=[0, specs['H']], backgroundcolor="rgb(200, 200, 200)"),
+                    aspectmode='manual', 
+                    aspectratio=dict(x=specs['L']/100, y=specs['W']/100, z=specs['H']/100)
+                ),
+                margin=dict(l=0, r=0, b=0, t=40)
+            )
             st.plotly_chart(fig, use_container_width=True)
 
-            # PDF Report
+            # PDF Report with full details
             pdf = FPDF()
             pdf.add_page(); pdf.set_font("Arial", 'B', 16)
-            pdf.cell(0, 10, f"Professional Load Plan: {c_type}", 0, 1, 'C')
+            pdf.cell(0, 10, f"Final Loading Report - {c_type}", 0, 1, 'C')
+            pdf.ln(5)
             pdf.set_font("Arial", '', 12)
-            pdf.cell(0, 10, f"Date: {datetime.now().strftime('%Y-%m-%d %H:%M')}", 0, 1)
-            pdf.cell(0, 10, f"Total Utilization: {(total_vol/specs['MAX_CBM'])*100:.2f}%", 0, 1)
-            st.download_button("📥 DOWNLOAD FINAL REPORT", data=pdf.output(dest='S').encode('latin-1'), file_name=f"Load_Plan_{c_type}.pdf")
+            pdf.cell(0, 10, f"Container Total Capacity: {specs['MAX_CBM']} CBM", 0, 1)
+            pdf.cell(0, 10, f"Cargo Total Volume: {total_vol:.2f} CBM", 0, 1)
+            pdf.cell(0, 10, f"Utilization: {utilization:.2f}%", 0, 1)
+            pdf.cell(0, 10, f"Total Gross Weight: {total_weight} kg", 0, 1)
+            pdf.cell(0, 10, f"Status: Professional Stacking (Heavy on Bottom)", 0, 1)
+            
+            st.download_button("📥 DOWNLOAD COMPLETE REPORT", data=pdf.output(dest='S').encode('latin-1'), file_name=f"Sudath_Consol_Report_{datetime.now().strftime('%Y%m%d')}.pdf")
