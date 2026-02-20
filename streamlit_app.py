@@ -34,8 +34,7 @@ def init_db():
     c.execute('''CREATE TABLE IF NOT EXISTS users (email TEXT PRIMARY KEY, password TEXT, reg_date TEXT)''')
     c.execute('''CREATE TABLE IF NOT EXISTS activity_logs (email TEXT, action TEXT, timestamp TEXT)''')
     c.execute("INSERT OR IGNORE INTO users VALUES ('sudath.lakmal@gmail.com', '853602795@@@vSL', '2026-02-08')")
-    conn.commit()
-    conn.close()
+    conn.commit(); conn.close()
 
 init_db()
 
@@ -87,23 +86,18 @@ CONTAINERS = {
 with st.sidebar:
     st.image("https://cdn-icons-png.flaticon.com/512/2343/2343894.png", width=100)
     st.success(f"✅ User: {st.session_state.user_email}")
-    
     if st.session_state.user_email == "sudath.lakmal@gmail.com":
         st.subheader("👨‍✈️ ADMIN CONTROL")
         if st.button("📊 VIEW USER REPORTS"):
             st.session_state.show_admin = not st.session_state.get('show_admin', False)
-    
     st.divider()
     c_type = st.selectbox("Select Container Type:", list(CONTAINERS.keys()))
     specs = CONTAINERS[c_type]
-    
     st.subheader("🔗 Share with Friends")
     st.code("https://sudath-consol-expert-tgbirizblcv4mfney8vvpz.streamlit.app/")
-    
     st.subheader("⭐ Rate our App")
     rating = st.slider("How helpful is this?", 1, 5, 5)
     if st.button("Submit Rating"): st.toast(f"Thank you for rating us {rating} stars!")
-
     st.divider()
     st.subheader("🤖 Smart Support (AI)")
     ai_msg = st.text_input("Ask about logistics...")
@@ -113,7 +107,6 @@ with st.sidebar:
                 res = ai_model.generate_content(f"Logistics expert mode: {ai_msg}")
                 st.info(res.text); log_activity(st.session_state.user_email, f"AI Query: {ai_msg[:20]}")
             except: st.error("AI Error")
-
     if st.button("LOGOUT"): st.session_state.auth = False; st.rerun()
 
 if st.session_state.get('show_admin', False):
@@ -122,52 +115,76 @@ if st.session_state.get('show_admin', False):
     st.dataframe(pd.read_sql("SELECT * FROM activity_logs ORDER BY timestamp DESC", conn), use_container_width=True)
     conn.close()
 
-# --- 5. CARGO ENTRY & VALIDATION ---
+# --- 5. CARGO ENTRY & PROFESSIONAL VALIDATION ---
 st.subheader(f"📊 {c_type} Cargo Entry")
-init_data = [{"Cargo": "PKG_001", "L": 120, "W": 100, "H": 100, "Qty": 5, "Gross_Weight_kg": 500}]
+init_data = [{"Cargo": "HEAVY_PKG", "L": 120, "W": 100, "H": 100, "Qty": 5, "Gross_Weight_kg": 1000},
+             {"Cargo": "LIGHT_PKG", "L": 60, "W": 60, "H": 60, "Qty": 10, "Gross_Weight_kg": 50}]
 df = st.data_editor(pd.DataFrame(init_data), num_rows="dynamic", use_container_width=True)
 
-if st.button("GENERATE VALIDATED 3D PLAN & REPORT", use_container_width=True):
-    clean_df = df.dropna()
-    total_vol = (clean_df['L'] * clean_df['W'] * clean_df['H'] * clean_df['Qty']).sum() / 1000000
-    
-    # ❌ Validation Check for Dimensions
-    too_large = []
-    for _, row in clean_df.iterrows():
-        if row['L'] > specs['L'] or row['W'] > specs['W'] or row['H'] > specs['H']:
-            too_large.append(f"{row['Cargo']} (Size Exceeded)")
-    
-    if too_large:
-        st.error(f"❌ Cannot Load: {', '.join(too_large)}. Items are larger than {c_type} internal size!")
-    elif total_vol > specs['MAX_CBM']:
-        st.error(f"❌ Capacity Exceeded! Total: {total_vol:.2f} CBM (Max: {specs['MAX_CBM']})")
+if st.button("GENERATE REAL-WORLD 3D LOAD PLAN", use_container_width=True):
+    clean_df = df.dropna().copy()
+    if clean_df.empty:
+        st.warning("Please enter cargo details.")
     else:
-        # Tight Loading Logic
-        fig = go.Figure()
-        colors = ['#EF553B', '#00CC96', '#AB63FA', '#FFA15A', '#19D3F3']
-        curr_x, curr_y, curr_z, max_h_row = 0, 0, 0, 0
+        # Sort by Weight (Heavy items first for ground layer)
+        clean_df = clean_df.sort_values(by="Gross_Weight_kg", ascending=False)
+        total_vol = (clean_df['L'] * clean_df['W'] * clean_df['H'] * clean_df['Qty']).sum() / 1000000
         
-        for i, row in clean_df.iterrows():
-            l, w, h, qty = row['L'], row['W'], row['H'], int(row['Qty'])
-            for q in range(qty):
-                if curr_y + w > specs['W']: curr_y = 0; curr_x += l
-                if curr_x + l > specs['L']: curr_x = 0; curr_y = 0; curr_z += max_h_row; max_h_row = 0
-                
-                fig.add_trace(go.Mesh3d(
-                    x=[curr_x, curr_x, curr_x+l, curr_x+l, curr_x, curr_x, curr_x+l, curr_x+l],
-                    y=[curr_y, curr_y+w, curr_y+w, curr_y, curr_y, curr_y+w, curr_y+w, curr_y],
-                    z=[curr_z, curr_z, curr_z, curr_z, curr_z+h, curr_z+h, curr_z+h, curr_z+h],
-                    color=colors[i % len(colors)], opacity=0.9, alphahull=0, name=row['Cargo'], showlegend=(q==0)
-                ))
-                curr_y += w
-                max_h_row = max(max_h_row, h)
+        too_large = [row['Cargo'] for _, row in clean_df.iterrows() if row['L'] > specs['L'] or row['W'] > specs['W'] or row['H'] > specs['H']]
+        
+        if too_large:
+            st.error(f"❌ Size Exceeded: {', '.join(too_large)} is too big for {c_type}!")
+        elif total_vol > specs['MAX_CBM']:
+            st.error(f"❌ Capacity Exceeded: {total_vol:.2f} CBM > {specs['MAX_CBM']} CBM")
+        else:
+            # Metrics
+            c1, c2, c3 = st.columns(3)
+            c1.metric("Utilization", f"{(total_vol/specs['MAX_CBM'])*100:.1f}%")
+            c2.metric("Total Weight", f"{clean_df['Gross_Weight_kg'].sum()} kg")
+            c3.metric("Load Status", "✅ Professional Stack")
 
-        fig.update_layout(scene=dict(aspectmode='manual', aspectratio=dict(x=specs['L']/100, y=specs['W']/100, z=specs['H']/100)))
-        st.plotly_chart(fig, use_container_width=True)
-        
-        # Simple PDF summary
-        pdf = FPDF()
-        pdf.add_page(); pdf.set_font("Arial", 'B', 16)
-        pdf.cell(0, 10, f"Loading Report - {c_type}", 0, 1)
-        pdf.set_font("Arial", '', 12); pdf.cell(0, 10, f"Total Volume: {total_vol:.2f} CBM", 0, 1)
-        st.download_button("📥 DOWNLOAD REPORT", data=pdf.output(dest='S').encode('latin-1'), file_name="Report.pdf")
+            # Real-world Layered Loading Logic
+            fig = go.Figure()
+            colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd']
+            curr_x, curr_y, curr_z = 0, 0, 0
+            layer_max_h = 0
+            
+            for i, row in clean_df.iterrows():
+                l, w, h, qty = row['L'], row['W'], row['H'], int(row['Qty'])
+                for q in range(qty):
+                    # Check Width
+                    if curr_y + w > specs['W']:
+                        curr_y = 0; curr_x += l
+                    # Check Length (If row full, start next layer or move back)
+                    if curr_x + l > specs['L']:
+                        curr_x = 0; curr_y = 0; curr_z += layer_max_h; layer_max_h = 0
+                    # Check Height
+                    if curr_z + h > specs['H']:
+                        st.warning(f"Could not fit all {row['Cargo']} due to height limits.")
+                        break
+
+                    fig.add_trace(go.Mesh3d(
+                        x=[curr_x, curr_x, curr_x+l, curr_x+l, curr_x, curr_x, curr_x+l, curr_x+l],
+                        y=[curr_y, curr_y+w, curr_y+w, curr_y, curr_y, curr_y+w, curr_y+w, curr_y],
+                        z=[curr_z, curr_z, curr_z, curr_z, curr_z+h, curr_z+h, curr_z+h, curr_z+h],
+                        color=colors[i % len(colors)], opacity=0.8, alphahull=0, name=row['Cargo'], showlegend=(q==0)
+                    ))
+                    curr_y += w
+                    layer_max_h = max(layer_max_h, h)
+
+            fig.update_layout(scene=dict(
+                xaxis=dict(title='Length (Head to Tail)', range=[0, specs['L']]),
+                yaxis=dict(title='Width', range=[0, specs['W']]),
+                zaxis=dict(title='Height', range=[0, specs['H']]),
+                aspectmode='manual', aspectratio=dict(x=specs['L']/100, y=specs['W']/100, z=specs['H']/100)
+            ))
+            st.plotly_chart(fig, use_container_width=True)
+
+            # PDF Report
+            pdf = FPDF()
+            pdf.add_page(); pdf.set_font("Arial", 'B', 16)
+            pdf.cell(0, 10, f"Professional Load Plan: {c_type}", 0, 1, 'C')
+            pdf.set_font("Arial", '', 12)
+            pdf.cell(0, 10, f"Date: {datetime.now().strftime('%Y-%m-%d %H:%M')}", 0, 1)
+            pdf.cell(0, 10, f"Total Utilization: {(total_vol/specs['MAX_CBM'])*100:.2f}%", 0, 1)
+            st.download_button("📥 DOWNLOAD FINAL REPORT", data=pdf.output(dest='S').encode('latin-1'), file_name=f"Load_Plan_{c_type}.pdf")
