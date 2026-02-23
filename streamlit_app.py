@@ -95,10 +95,6 @@ with st.sidebar:
     specs = CONTAINERS[c_type]
     st.subheader("🔗 Share with Friends")
     st.code("https://sudath-consol-expert-tgbirizblcv4mfney8vvpz.streamlit.app/")
-    st.subheader("⭐ Rate our App")
-    rating = st.slider("How helpful is this?", 1, 5, 5)
-    if st.button("Submit Rating"): st.toast(f"Thank you for rating us {rating} stars!")
-    st.divider()
     st.subheader("🤖 Smart Support (AI)")
     ai_msg = st.text_input("Ask about logistics...")
     if st.button("Ask AI"):
@@ -129,9 +125,13 @@ if st.button("GENERATE REAL-WORLD 3D LOAD PLAN", use_container_width=True):
         # Sort by Weight (Heavy items first for bottom-up loading)
         clean_df = clean_df.sort_values(by="Gross_Weight_kg", ascending=False)
         
-        # Calculate Volume & Weight
+        # Calculate Volume 
         total_vol = (clean_df['L'] * clean_df['W'] * clean_df['H'] * clean_df['Qty']).sum() / 1000000
-        total_weight = (clean_df['Gross_Weight_kg'] * clean_df['Qty']).sum()
+        
+        # --- FIXED WEIGHT LOGIC ---
+        # Line වල ඇති මුළු බර පමණක් එකතු කරයි (Qty වලින් ගුණ නොකරයි)
+        total_weight = clean_df['Gross_Weight_kg'].sum()
+        
         utilization = (total_vol / specs['MAX_CBM']) * 100
         
         too_large = [row['Cargo'] for _, row in clean_df.iterrows() if row['L'] > specs['L'] or row['W'] > specs['W'] or row['H'] > specs['H']]
@@ -157,19 +157,15 @@ if st.button("GENERATE REAL-WORLD 3D LOAD PLAN", use_container_width=True):
             for i, row in clean_df.iterrows():
                 l, w, h, qty = row['L'], row['W'], row['H'], int(row['Qty'])
                 for q in range(qty):
-                    # Wrap across Width
                     if curr_y + w > specs['W']:
                         curr_y = 0; curr_x += l
-                    # Wrap across Length (If front is full, start next vertical layer)
                     if curr_x + l > specs['L']:
                         curr_x = 0; curr_y = 0; curr_z += layer_max_h; layer_max_h = 0
                     
-                    # Final Height Check
                     if curr_z + h > specs['H']:
                         st.warning(f"⚠️ Some units of {row['Cargo']} skipped: Vertical limit reached.")
                         break
 
-                    # Draw 3D Box
                     fig.add_trace(go.Mesh3d(
                         x=[curr_x, curr_x, curr_x+l, curr_x+l, curr_x, curr_x, curr_x+l, curr_x+l],
                         y=[curr_y, curr_y+w, curr_y+w, curr_y, curr_y, curr_y+w, curr_y+w, curr_y],
@@ -177,7 +173,7 @@ if st.button("GENERATE REAL-WORLD 3D LOAD PLAN", use_container_width=True):
                         color=colors[i % len(colors)], 
                         opacity=0.85, 
                         alphahull=0, 
-                        name=f"{row['Cargo']} (W:{row['Gross_Weight_kg']}kg)", 
+                        name=f"{row['Cargo']}", 
                         showlegend=(q==0)
                     ))
                     
@@ -197,7 +193,7 @@ if st.button("GENERATE REAL-WORLD 3D LOAD PLAN", use_container_width=True):
             )
             st.plotly_chart(fig, use_container_width=True)
 
-            # PDF Report with full details
+            # PDF Report
             pdf = FPDF()
             pdf.add_page(); pdf.set_font("Arial", 'B', 16)
             pdf.cell(0, 10, f"Final Loading Report - {c_type}", 0, 1, 'C')
@@ -207,6 +203,5 @@ if st.button("GENERATE REAL-WORLD 3D LOAD PLAN", use_container_width=True):
             pdf.cell(0, 10, f"Cargo Total Volume: {total_vol:.2f} CBM", 0, 1)
             pdf.cell(0, 10, f"Utilization: {utilization:.2f}%", 0, 1)
             pdf.cell(0, 10, f"Total Gross Weight: {total_weight} kg", 0, 1)
-            pdf.cell(0, 10, f"Status: Professional Stacking (Heavy on Bottom)", 0, 1)
             
             st.download_button("📥 DOWNLOAD COMPLETE REPORT", data=pdf.output(dest='S').encode('latin-1'), file_name=f"Sudath_Consol_Report_{datetime.now().strftime('%Y%m%d')}.pdf")
